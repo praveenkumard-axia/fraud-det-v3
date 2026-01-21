@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fraud Detection Dashboard v4</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
+    }
+
+    .animate-pulse {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-slate-950 text-white p-4 font-sans">
+
+  <!-- Header -->
+  <div class="bg-slate-900 rounded-lg p-4 mb-4 flex justify-between items-center border border-slate-800">
+    <div class="flex items-center gap-4">
+      <div class="w-10 h-10 bg-orange-500 rounded flex items-center justify-center font-bold text-xl">P</div>
+      <div>
+        <div class="font-semibold text-lg">Pure Storage</div>
+        <div class="text-sm text-slate-400">AI Fraud Detection Pipeline Demo</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <div class="px-3 py-1.5 bg-slate-800 rounded text-sm border border-slate-700">FlashBlade</div>
+      <div class="px-3 py-1.5 bg-slate-800 rounded text-sm border border-slate-700">NVIDIA L40S</div>
+      <div class="flex items-center gap-2 px-4 py-1.5 bg-red-500/20 border border-red-500/50 rounded">
+        <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+        <span class="text-red-400 text-sm font-semibold">LIVE</span>
+      </div>
+      <div class="font-mono text-2xl font-bold bg-slate-800 px-4 py-2 rounded">01:47.3</div>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-12 gap-4">
+    <!-- LEFT COLUMN -->
+    <div class="col-span-8 space-y-4">
+
+      <!-- Pipeline Progress Bars -->
+      <div class="bg-slate-900 rounded-lg p-4 border border-slate-800">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="font-semibold text-lg">Pipeline Progress</h2>
+          <div class="text-sm text-slate-400">Backlog: <span class="text-orange-400 font-mono font-bold">2.4M
+              txns</span></div>
+        </div>
+
+        <!-- Generated -->
+        <div class="mb-6">
+          <div class="flex justify-between text-sm mb-1">
+            <span class="text-slate-400">Generated</span>
+            <span class="font-mono text-white">10,000,000 txns</span>
+          </div>
+          <div class="h-8 bg-slate-800 rounded-lg overflow-hidden">
+            <div
+              class="h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-lg flex items-center justify-end pr-3"
+              style="width: 100%">
+              <span class="text-xs font-mono font-bold">10M</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Data Prep -->
+        <div class="mb-6">
+          <div class="text-sm text-slate-400 mb-2">Data Prep</div>
+          <div class="space-y-2">
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-blue-400">CPU (1 pod)</span>
+                <span class="font-mono">2,100,000</span>
+              </div>
+              <div class="h-6 bg-slate-800 rounded overflow-hidden">
+                <div
+                  class="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded flex items-center justify-end pr-2"
+                  style="width: 21%">
+                  <span class="text-xs font-mono">2.1M</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-emerald-400">GPU (1 pod)</span>
+                <span class="font-mono">5,500,000</span>
+              </div>
+              <div class="h-6 bg-slate-800 rounded overflow-hidden">
+                <div
+                  class="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded flex items-center justify-end pr-2"
+                  style="width: 55%">
+                  <span class="text-xs font-mono">5.5M</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inference -->
+        <div>
+          <div class="text-sm text-slate-400 mb-2">Inference</div>
+          <div class="space-y-2">
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-blue-400">CPU (1 pod)</span>
+                <span class="font-mono">1,800,000</span>
+              </div>
+              <div class="h-6 bg-slate-800 rounded overflow-hidden">
+                <div
+                  class="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded flex items-center justify-end pr-2"
+                  style="width: 18%">
+                  <span class="text-xs font-mono">1.8M</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="text-emerald-400">GPU (1 pod)</span>
+                <span class="font-mono">4,800,000</span>
+              </div>
+              <div class="h-6 bg-slate-800 rounded overflow-hidden">
+                <div
+                  class="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded flex items-center justify-end pr-2"
+                  style="width: 48%">
+                  <span class="text-xs font-mono">4.8M</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Utilization Trend Chart -->
+      <div class="bg-slate-900 rounded-lg p-4 border border-slate-800">
+        <h2 class="font-semibold mb-4">Utilization Trend</h2>
+        <div class="h-40 relative">
+          <div class="absolute left-0 top-0 bottom-0 w-12 flex flex-col justify-between text-xs text-slate-500 py-1">
+            <span>100%</span>
+            <span>75%</span>
+            <span>50%</span>
+            <span>25%</span>
+            <span>0%</span>
+          </div>
+          <div class="ml-12 h-full bg-slate-800/50 rounded relative overflow-hidden">
+            <div class="absolute inset-0 flex flex-col justify-between py-1">
+              <div class="border-t border-slate-700/50"></div>
+              <div class="border-t border-slate-700/50"></div>
+              <div class="border-t border-slate-700/50"></div>
+              <div class="border-t border-slate-700/50"></div>
+              <div class="border-t border-slate-700/50"></div>
+            </div>
+            <svg class="absolute inset-0 w-full h-full" viewBox="0 0 600 160" preserveAspectRatio="none">
+              <!-- GPU line -->
+              <polyline fill="none" stroke="#10b981" stroke-width="3"
+                points="0,100 60,90 120,60 180,45 240,35 300,28 360,22 420,18 480,16 540,16 600,16" />
+              <text x="540" y="12" fill="#10b981" font-size="12" font-weight="bold">GPU 85%</text>
+              <!-- CPU line -->
+              <polyline fill="none" stroke="#3b82f6" stroke-width="3"
+                points="0,120 60,100 120,75 180,60 240,50 300,42 360,38 420,35 480,34 540,34 600,34" />
+              <text x="540" y="30" fill="#3b82f6" font-size="12" font-weight="bold">CPU 78%</text>
+              <!-- FB line -->
+              <polyline fill="none" stroke="#f97316" stroke-width="3" stroke-dasharray="8,4"
+                points="0,142 60,141 120,140 180,139 240,138 300,138 360,138 420,138 480,138 540,138 600,138" />
+              <text x="540" y="150" fill="#f97316" font-size="12" font-weight="bold">FB 12%</text>
+            </svg>
+          </div>
+        </div>
+        <div class="flex justify-center gap-6 mt-2 text-xs">
+          <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-emerald-500 inline-block"></span> GPU</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-blue-500 inline-block"></span> CPU</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-orange-500 inline-block"></span>
+            FlashBlade</span>
+        </div>
+      </div>
+
+      <!-- Throughput Trend Chart -->
+      <div class="bg-slate-900 rounded-lg p-4 border border-slate-800">
+        <h2 class="font-semibold mb-4">Throughput (Txns/sec)</h2>
+        <div class="h-40 relative">
+          <div class="absolute left-0 top-0 bottom-0 w-12 flex flex-col justify-between text-xs text-slate-500 py-1">
+            <span>500K</span>
+            <span>375K</span>
+            <span>250K</span>
+            <span>125K</span>
+            <span>0</span>
+          </div>
+          <div class="ml-12 h-full bg-slate-800/50 rounded relative overflow-hidden">
+            <div class="absolute inset-0 flex flex-col justify-between py-1">
+              <div class="border-t border-slate-700/50"></div>
+              <div class="border-t border-slate-700/50"></div>
+              <div class="border-t border-slate-700/50"></div>
+              <div class="border-t border-slate-700/50"></div>
+              <div class="border-t border-slate-700/50"></div>
+            </div>
+            <svg class="absolute inset-0 w-full h-full" viewBox="0 0 600 160" preserveAspectRatio="none">
+              <!-- GPU throughput -->
+              <polyline fill="none" stroke="#10b981" stroke-width="3"
+                points="0,150 60,120 120,80 180,55 240,40 300,32 360,28 420,26 480,25 540,25 600,25" />
+              <text x="540" y="20" fill="#10b981" font-size="12" font-weight="bold">312K</text>
+              <!-- CPU throughput -->
+              <polyline fill="none" stroke="#3b82f6" stroke-width="3"
+                points="0,155 60,145 120,130 180,120 240,115 300,112 360,110 420,108 480,108 540,108 600,108" />
+              <text x="540" y="104" fill="#3b82f6" font-size="12" font-weight="bold">45K</text>
+            </svg>
+          </div>
+        </div>
+        <div class="flex justify-center gap-6 mt-2 text-xs">
+          <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-emerald-500 inline-block"></span> GPU
+            Path</span>
+          <span class="flex items-center gap-1"><span class="w-3 h-0.5 bg-blue-500 inline-block"></span> CPU Path</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div class="col-span-4 space-y-4">
+
+      <!-- Business Metrics -->
+      <div class="bg-slate-900 rounded-lg p-4 border border-slate-800">
+        <h2 class="font-semibold mb-3">Business Impact</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-slate-800 rounded-lg p-3">
+            <div class="text-2xl font-bold font-mono text-emerald-400">$247K</div>
+            <div class="text-xs text-slate-400">Fraud Prevented</div>
+          </div>
+          <div class="bg-slate-800 rounded-lg p-3">
+            <div class="text-2xl font-bold font-mono text-white">6.6M</div>
+            <div class="text-xs text-slate-400">Txns Scored</div>
+          </div>
+          <div class="bg-slate-800 rounded-lg p-3">
+            <div class="text-2xl font-bold font-mono text-orange-400">4,891</div>
+            <div class="text-xs text-slate-400">Fraud Blocked</div>
+          </div>
+          <div class="bg-slate-800 rounded-lg p-3">
+            <div class="text-2xl font-bold font-mono text-purple-400">357K</div>
+            <div class="text-xs text-slate-400">Txns/sec</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fraud Levels -->
+      <div class="bg-slate-900 rounded-lg p-4 border border-slate-800">
+        <h2 class="font-semibold mb-3">Fraud Risk Distribution</h2>
+
+        <!-- Stacked bar -->
+        <div class="h-10 flex rounded-lg overflow-hidden mb-3">
+          <div class="bg-emerald-500 flex items-center justify-center text-xs font-bold" style="width: 65%">Low (0-60)
+          </div>
+          <div class="bg-yellow-500 flex items-center justify-center text-xs font-bold text-slate-900"
+            style="width: 25%">Med</div>
+          <div class="bg-red-500 flex items-center justify-center text-xs font-bold" style="width: 10%">Hi</div>
+        </div>
+
+        <div class="space-y-2">
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-emerald-400">Low Risk (0-60%)</span>
+              <span class="font-mono">4,290,000</span>
+            </div>
+            <div class="h-4 bg-slate-800 rounded overflow-hidden">
+              <div class="h-full bg-emerald-500 rounded" style="width: 65%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-yellow-400">Medium Risk (60-90%)</span>
+              <span class="font-mono">1,650,000</span>
+            </div>
+            <div class="h-4 bg-slate-800 rounded overflow-hidden">
+              <div class="h-full bg-yellow-500 rounded" style="width: 25%"></div>
+            </div>
+          </div>
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-red-400">High Risk (90-100%)</span>
+              <span class="font-mono">660,000</span>
+            </div>
+            <div class="h-4 bg-slate-800 rounded overflow-hidden">
+              <div class="h-full bg-red-500 rounded" style="width: 10%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- FlashBlade Status -->
+      <div class="bg-slate-900 rounded-lg p-4 border border-orange-500/30">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold">FlashBlade</h2>
+          <span class="text-xs text-emerald-400 flex items-center gap-1">
+            <span class="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block"></span>
+            Connected
+          </span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 mb-3">
+          <div class="bg-slate-800 rounded p-2 text-center">
+            <div class="text-lg font-bold font-mono text-blue-400">1.2 GB/s</div>
+            <div class="text-xs text-slate-400">Read</div>
+          </div>
+          <div class="bg-slate-800 rounded p-2 text-center">
+            <div class="text-lg font-bold font-mono text-emerald-400">850 MB/s</div>
+            <div class="text-xs text-slate-400">Write</div>
+          </div>
+        </div>
+        <div class="mb-2">
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-400">Utilization</span>
+            <span class="text-orange-400 font-mono">12%</span>
+          </div>
+          <div class="h-3 bg-slate-800 rounded-full overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-orange-500 to-orange-400 rounded-full" style="width: 12%"></div>
+          </div>
+        </div>
+        <div class="text-center text-sm">
+          <span class="text-slate-400">Headroom: </span>
+          <span class="text-emerald-400 font-bold text-lg">8.3x</span>
+        </div>
+      </div>
+
+      <!-- Scaling Controls -->
+      <div class="bg-slate-900 rounded-lg p-4 border border-slate-800">
+        <h2 class="font-semibold mb-3">Scaling Controls</h2>
+
+        <!-- Generator Speed -->
+        <div class="mb-4">
+          <div class="flex justify-between text-sm mb-2">
+            <span class="text-purple-400">Generator Speed</span>
+            <span class="font-mono">50K txn/s</span>
+          </div>
+          <input type="range" min="10" max="100" value="50"
+            class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500">
+        </div>
+
+        <!-- Pod Controls -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-blue-400">CPU Prep Pods</span>
+            <div class="flex items-center gap-2">
+              <button
+                class="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded flex items-center justify-center font-bold">-</button>
+              <span class="w-8 text-center font-mono font-bold">1</span>
+              <button
+                class="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded flex items-center justify-center font-bold">+</button>
+            </div>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-emerald-400">GPU Prep Pods</span>
+            <div class="flex items-center gap-2">
+              <button
+                class="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded flex items-center justify-center font-bold">-</button>
+              <span class="w-8 text-center font-mono font-bold">1</span>
+              <button
+                class="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded flex items-center justify-center font-bold">+</button>
+            </div>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-blue-400">CPU Infer Pods</span>
+            <div class="flex items-center gap-2">
+              <button
+                class="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded flex items-center justify-center font-bold">-</button>
+              <span class="w-8 text-center font-mono font-bold">1</span>
+              <button
+                class="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded flex items-center justify-center font-bold">+</button>
+            </div>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-emerald-400">GPU Infer Pods</span>
+            <div class="flex items-center gap-2">
+              <button
+                class="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded flex items-center justify-center font-bold">-</button>
+              <span class="w-8 text-center font-mono font-bold">1</span>
+              <button
+                class="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded flex items-center justify-center font-bold">+</button>
+            </div>
+          </div>
+        </div>
+
+        <button
+          class="w-full mt-4 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg font-semibold transition-colors">Apply
+          Scaling</button>
+      </div>
+
+      <!-- Start/Stop -->
+      <div class="flex gap-2">
+        <button class="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-semibold">▶ Start</button>
+        <button class="flex-1 py-3 bg-red-600 hover:bg-red-700 rounded-lg font-semibold">⏹ Stop</button>
+        <button class="py-3 px-4 bg-slate-700 hover:bg-slate-600 rounded-lg font-semibold">↺</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Key Message -->
+  <div
+    class="mt-4 bg-gradient-to-r from-orange-500/20 via-orange-500/10 to-transparent rounded-lg p-4 border border-orange-500/30">
+    <p class="text-center text-lg">
+      💡 Scaled compute <span class="text-emerald-400 font-bold">4x</span> — FlashBlade utilization went from
+      <span class="text-orange-400 font-bold"> 8%</span> to
+      <span class="text-orange-400 font-bold"> 12%</span>.
+      <span class="text-orange-400 font-semibold"> Storage is NOT your bottleneck.</span>
+    </p>
+  </div>
+  <script>
+    // Configuration
+    const API_URL = 'http://localhost:8000/api';
+    let pollingInterval;
+    let podCounts = { cpu_prep: 1, gpu_prep: 1, cpu_infer: 1, gpu_infer: 1 };
+    let generatorSpeed = 50;
+
+    // API Client
+    async function fetchDashboard() {
+      try {
+        const res = await fetch(`${API_URL}/dashboard`);
+        return await res.json();
+      } catch (e) { console.error(e); return null; }
+    }
+
+    async function controlPipeline(action, data = {}) {
+      try {
+        const res = await fetch(`${API_URL}/control/${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        return await res.json();
+      } catch (e) { console.error(e); return { success: false }; }
+    }
+
+    // UI Updates
+    function updateUI(data) {
+      if (!data) return;
+
+      console.log('Updating UI with data:', data);
+
+      // Timer - update first one found
+      const timer = document.querySelector('.font-mono.text-2xl.font-bold');
+      if (timer) timer.textContent = data.status.elapsed;
+
+      // Business metrics - find and update each one
+      const allMetrics = document.querySelectorAll('.text-2xl.font-bold.font-mono');
+      allMetrics.forEach((metric, idx) => {
+        const label = metric.nextElementSibling;
+        if (!label) return;
+
+        const labelText = label.textContent;
+        if (labelText.includes('Fraud Prevented')) {
+          metric.textContent = '$' + Math.round(data.business.fraud_prevented / 1000) + 'K';
+        } else if (labelText.includes('Txns Scored')) {
+          metric.textContent = (data.business.txns_scored / 1e6).toFixed(1) + 'M';
+        } else if (labelText.includes('Fraud Blocked')) {
+          metric.textContent = data.business.fraud_blocked.toLocaleString();
+        } else if (labelText.includes('Txns/sec')) {
+          metric.textContent = Math.round(data.business.throughput / 1000) + 'K';
+        }
+      });
+
+      // Update generated count
+      const genSpan = document.querySelector('.from-purple-600 .font-mono.font-bold');
+      if (genSpan) genSpan.textContent = (data.pipeline_progress.generated / 1e6).toFixed(1) + 'M';
+
+      // Update backlog
+      const backlogSpans = document.querySelectorAll('.text-orange-400.font-mono.font-bold');
+      backlogSpans.forEach(span => {
+        if (span.textContent.includes('M txns') || span.textContent.includes('txns')) {
+          span.textContent = (data.pipeline_progress.backlog / 1e6).toFixed(1) + 'M txns';
+        }
+      });
+
+      // Live indicator
+      const liveSpan = document.querySelector('.text-red-400.text-sm.font-semibold');
+      if (liveSpan) {
+        liveSpan.textContent = data.status.live ? 'LIVE' : 'IDLE';
+        const dot = liveSpan.previousElementSibling;
+        if (dot && data.status.live) {
+          dot.classList.add('animate-pulse');
+        } else if (dot) {
+          dot.classList.remove('animate-pulse');
+        }
+      }
+
+      // Log current stage for debugging
+      console.log(`Stage: ${data.status.stage}, Status: ${data.status.status}, Live: ${data.status.live}`);
+    }
+
+    // Controls
+    function setupControls() {
+      // Start/Stop/Reset
+      document.querySelectorAll('button').forEach(btn => {
+        if (btn.textContent.includes('Start')) {
+          btn.onclick = () => controlPipeline('start');
+        } else if (btn.textContent.includes('Stop')) {
+          btn.onclick = () => controlPipeline('stop');
+        } else if (btn.textContent === '↺') {
+          btn.onclick = async () => {
+            await controlPipeline('reset');
+            await updateUI(await fetchDashboard());
+          };
+        }
+      });
+    }
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', () => {
+      setupControls();
+      pollingInterval = setInterval(async () => {
+        const data = await fetchDashboard();
+        updateUI(data);
+      }, 1000);
+    });
+  </script>
+
+</body>
+
+</html>

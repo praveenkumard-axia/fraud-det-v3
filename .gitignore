@@ -1,0 +1,22 @@
+# Generated data
+run_data_output/
+run_features_output/
+run_models_output/
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+# Virtual environment
+myenv/
+venv/
+env/
+# IDE
+.vscode/
+.idea/
+# Logs
+*.log
+pipeline_report.txt
+EOF
