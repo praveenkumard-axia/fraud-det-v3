@@ -223,7 +223,7 @@ class EnvironmentVariables:
         GENERATION_RATE: str(GenerationRateLimits.DEFAULT_RATE),
         BATCH_SIZE: "50000",
         CONSUMER_GROUP: "fraud-pipeline",
-        SYSTEM_PRIORITY: SystemPriorities.INFERENCE,
+        SYSTEM_PRIORITY: SystemPriorities.BALANCED,
         ENABLE_METRICS: "true"
     }
 

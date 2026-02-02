@@ -379,30 +379,37 @@ class DataPrepService:
 def main():
     signal.signal(signal.SIGINT, signal_handler)
     service = DataPrepService()
-    start_time = time.time() 
-    try:
-        total_rows, total_duration = service.process_run_loop()
-    except Exception as e:
-        log(f"Error: {e}")
-        total_rows, total_duration = 0, 0
     
-    elapsed = time.time() - start_time
-    throughput = total_rows / elapsed if elapsed > 0 else 0
+    continuous_mode = os.getenv('CONTINUOUS_MODE', 'true').lower() == 'true'
     
-    # Resource Snapshot
-    cpu_percent = psutil.cpu_percent()
-    cpu_cores = (cpu_percent / 100.0) * psutil.cpu_count()
-    mem_info = psutil.virtual_memory()
-    mem_gb = mem_info.used / (1024 ** 3)
-    
-    log("=" * 70)
-    log(f"METRICS: Rows={total_rows} | Time={elapsed:.2f}s | Throughput={throughput:.1f} rows/s")
-    log(f"METRICS: CPU={cpu_cores:.1f} Cores | RAM={mem_info.percent:.1f}% ({mem_gb:.2f} GB)")
-    log("=" * 70)
-    log("COMPLETE")
-    
-    # Final Stats update with cumulative tracking
-    log_telemetry(total_rows, throughput, elapsed, cpu_cores, mem_gb, mem_info.percent, status="Completed")
+    if continuous_mode:
+        service.run_continuous()
+    else:
+        # Legacy batch mode
+        start_time = time.time() 
+        try:
+            total_rows, total_duration = service.process_run_loop()
+        except Exception as e:
+            log(f"Error: {e}")
+            total_rows, total_duration = 0, 0
+        
+        elapsed = time.time() - start_time
+        throughput = total_rows / elapsed if elapsed > 0 else 0
+        
+        # Resource Snapshot
+        cpu_percent = psutil.cpu_percent()
+        cpu_cores = (cpu_percent / 100.0) * psutil.cpu_count()
+        mem_info = psutil.virtual_memory()
+        mem_gb = mem_info.used / (1024 ** 3)
+        
+        log("=" * 70)
+        log(f"METRICS: Rows={total_rows} | Time={elapsed:.2f}s | Throughput={throughput:.1f} rows/s")
+        log(f"METRICS: CPU={cpu_cores:.1f} Cores | RAM={mem_info.percent:.1f}% ({mem_gb:.2f} GB)")
+        log("=" * 70)
+        log("COMPLETE")
+        
+        # Final Stats update with cumulative tracking
+        log_telemetry(total_rows, throughput, elapsed, cpu_cores, mem_gb, mem_info.percent, status="Completed")
 
 if __name__ == "__main__":
     main()

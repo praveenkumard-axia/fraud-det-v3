@@ -134,18 +134,17 @@ class ModelTrainer:
         try:
             response = requests.get(f"{self.backend_url}/api/control/priority", timeout=2)
             if response.status_code == 200:
-                return response.json().get('priority', SystemPriorities.INFERENCE)
+                return response.json().get('priority', SystemPriorities.BALANCED)
         except:
             pass
-        return SystemPriorities.INFERENCE  # Default to inference priority
+        return SystemPriorities.BALANCED  # Default to balanced priority
     
     def should_train_now(self) -> bool:
         """Determine if training should run now"""
-        # Check priority
+        # Always allow training in this benchmark mode
         priority = self.check_system_priority()
         if priority == SystemPriorities.INFERENCE:
-            log.info(f"System priority is {priority}, skipping training...")
-            return False
+            log.info(f"System priority is {priority}, but continuing training as requested.")
         
         # Check time interval
         elapsed_since_train = time.time() - self.last_train_time
@@ -156,7 +155,7 @@ class ModelTrainer:
     
     def get_recent_feature_files(self, max_files: int = 100) -> List[Path]:
         """Get recent feature files for training"""
-        files = sorted(self.input_path.glob("features_*.parquet"), key=lambda x: x.stat().st_mtime, reverse=True)
+        files = sorted(self.input_path.glob("features_batch_*.parquet"), key=lambda x: x.stat().st_mtime, reverse=True)
         return files[:max_files]
     
     def load_features(self) -> Path:

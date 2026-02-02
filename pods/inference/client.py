@@ -116,24 +116,22 @@ def main():
     # Connect to Triton
     try:
         triton_client = httpclient.InferenceServerClient(url=triton_url, verbose=False)
-    except Exception as e:
-        log(f"Failed to create Triton client: {e}")
-        if not continuous_mode:
-            sys.exit(1)
+        if not triton_client.is_server_live():
+            log("Triton server is not live")
+            if not continuous_mode:
+                sys.exit(1)
+            else:
+                log("Triton not available, loading XGBoost model for CPU inference...")
+                triton_client = None
         else:
-            log("Triton not available, loading XGBoost model for CPU inference...")
-            triton_client = None
-    
-    if triton_client and not triton_client.is_server_live():
-        log("Triton server is not live")
-        if not continuous_mode:
-            sys.exit(1)
-        else:
-            log("Triton not available, loading XGBoost model for CPU inference...")
-            triton_client = None
-    else:
-        if triton_client:
             log("✓ Triton server is live")
+    except Exception as e:
+        log(f"Failed to connect to Triton server: {e}")
+        if not continuous_mode:
+            sys.exit(1)
+        else:
+            log("Triton not available, loading XGBoost model for CPU inference...")
+            triton_client = None
     
     # Load CPU model if Triton not available
     cpu_model = None

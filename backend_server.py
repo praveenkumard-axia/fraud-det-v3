@@ -92,7 +92,7 @@ class PipelineState:
         
         # NEW: Continuous operation state
         self.generation_rate = GenerationRateLimits.DEFAULT_RATE
-        self.system_priority = SystemPriorities.INFERENCE
+        self.system_priority = SystemPriorities.BALANCED
         self.pod_counts = {
             "preprocessing": 1,
             "training": 1,
