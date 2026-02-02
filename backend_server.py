@@ -318,7 +318,25 @@ def get_dashboard_data():
     # Calculate business metrics
     fraud_rate = 0.005
     avg_txn_amount = 50
-    fraud_blocked = tel["fraud_blocked"]
+    
+    # Get REAL risk distribution from Redis
+    risk_metrics = state.queue_service.get_metrics("fraud_dist_")
+    real_low = risk_metrics.get("fraud_dist_low", 0)
+    real_medium = risk_metrics.get("fraud_dist_medium", 0)
+    real_high = risk_metrics.get("fraud_dist_high", 0)
+    
+    # If we have real metrics, use them, otherwise fallback to ratios to keep charts moving
+    total_samples = real_low + real_medium + real_high
+    if total_samples > 0:
+        low_dist = real_low
+        medium_dist = real_medium
+        high_dist = real_high
+    else:
+        low_dist = int(tel["txns_scored"] * 0.65)
+        medium_dist = int(tel["txns_scored"] * 0.25)
+        high_dist = int(tel["txns_scored"] * 0.10)
+
+    fraud_blocked = real_high if total_samples > 0 else tel["fraud_blocked"]
     fraud_prevented_usd = fraud_blocked * avg_txn_amount
     
     # Simulated throughput split
@@ -350,14 +368,14 @@ def get_dashboard_data():
         },
         "business": {
             "fraud_prevented": int(fraud_prevented_usd),
-            "txns_scored": tel["txns_scored"],
+            "txns_scored": total_samples if total_samples > 0 else tel["txns_scored"],
             "fraud_blocked": fraud_blocked,
             "throughput": total_throughput
         },
         "fraud_dist": {
-            "low": int(tel["txns_scored"] * 0.65),
-            "medium": int(tel["txns_scored"] * 0.25),
-            "high": int(tel["txns_scored"] * 0.10)
+            "low": low_dist,
+            "medium": medium_dist,
+            "high": high_dist
         },
         "flashblade": {
             "read": 1200 + (flashblade_util * 10),  # Simulated

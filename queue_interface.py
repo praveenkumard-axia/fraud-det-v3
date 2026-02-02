@@ -88,15 +88,22 @@ class QueueInterface(ABC):
     
     @abstractmethod
     def clear(self, topic: str) -> bool:
-        """
-        Clear all messages from a queue
-        
-        Args:
-            topic: Topic/queue name
-            
-        Returns:
-            True if successful
-        """
+        """Clear all messages from a queue"""
+        pass
+
+    @abstractmethod
+    def increment_metric(self, name: str, amount: int = 1) -> bool:
+        """Atomically increment a global metric"""
+        pass
+
+    @abstractmethod
+    def get_metrics(self, prefix: str = "") -> Dict[str, int]:
+        """Get all metrics with a given prefix"""
+        pass
+
+    @abstractmethod
+    def clear_metrics(self) -> bool:
+        """Clear all global metrics"""
         pass
 
 
@@ -218,6 +225,26 @@ class InMemoryQueue(QueueInterface):
             print(f"Error clearing {topic}: {e}")
             return False
 
+    def __init__(self):
+        self.queues: Dict[str, deque] = {}
+        self.locks: Dict[str, threading.Lock] = {}
+        self.metrics: Dict[str, int] = {}
+        self.metrics_lock = threading.Lock()
+
+    def increment_metric(self, name: str, amount: int = 1) -> bool:
+        with self.metrics_lock:
+            self.metrics[name] = self.metrics.get(name, 0) + amount
+        return True
+
+    def get_metrics(self, prefix: str = "") -> Dict[str, int]:
+        with self.metrics_lock:
+            return {k: v for k, v in self.metrics.items() if k.startswith(prefix)}
+
+    def clear_metrics(self) -> bool:
+        with self.metrics_lock:
+            self.metrics.clear()
+        return True
+
 
 class RedisQueue(QueueInterface):
     """
@@ -296,6 +323,35 @@ class RedisQueue(QueueInterface):
             return True
         except Exception as e:
             print(f"Error clearing Redis {topic}: {e}")
+            return False
+
+    def increment_metric(self, name: str, amount: int = 1) -> bool:
+        try:
+            self.redis.hincrby("global_metrics", name, amount)
+            return True
+        except Exception as e:
+            print(f"Error incrementing Redis metric {name}: {e}")
+            return False
+
+    def get_metrics(self, prefix: str = "") -> Dict[str, int]:
+        try:
+            raw_metrics = self.redis.hgetall("global_metrics")
+            metrics = {}
+            for k, v in raw_metrics.items():
+                name = k.decode('utf-8')
+                if name.startswith(prefix):
+                    metrics[name] = int(v)
+            return metrics
+        except Exception as e:
+            print(f"Error getting Redis metrics: {e}")
+            return {}
+
+    def clear_metrics(self) -> bool:
+        try:
+            self.redis.delete("global_metrics")
+            return True
+        except Exception as e:
+            print(f"Error clearing Redis metrics: {e}")
             return False
 
 

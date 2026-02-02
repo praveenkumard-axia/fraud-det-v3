@@ -106,11 +106,12 @@ def main():
     queue = get_queue_service()
     
     # Clear existing queues for a fresh start
-    print(">>> Clearing Redis queues...")
+    print(">>> Clearing Redis queues and metrics...")
     queue.clear(QueueTopics.RAW_TRANSACTIONS)
     queue.clear(QueueTopics.FEATURES_READY)
     queue.clear(QueueTopics.INFERENCE_RESULTS)
     queue.clear(QueueTopics.TRAINING_QUEUE)
+    queue.clear_metrics()
 
     # Handle Ctrl+C
     def handle_signal(sig, frame):

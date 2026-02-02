@@ -235,16 +235,35 @@ def run_continuous_inference(triton_client, cpu_model, model_name, batch_size, q
                 log("⚠ Using simulation mode (no model available)")
                 results = np.random.rand(len(messages)).astype(np.float32)
             
-            # Prepare output messages
+            # Prepare output messages and track buckets
             output_messages = []
+            low_count = 0
+            medium_count = 0
+            high_count = 0
+            
             for i, msg in enumerate(messages):
+                score = float(results[i])
                 output_msg = msg.copy()
-                output_msg['fraud_score'] = float(results[i])
-                output_msg['fraud_prediction'] = int(results[i] > 0.5)
+                output_msg['fraud_score'] = score
+                output_msg['fraud_prediction'] = int(score > 0.5)
                 output_messages.append(output_msg)
+                
+                # Categorize for benchmarking distribution
+                if score < 0.6:
+                    low_count += 1
+                elif score < 0.9:
+                    medium_count += 1
+                else:
+                    high_count += 1
             
             # Publish to results queue
             queue_service.publish_batch(QueueTopics.INFERENCE_RESULTS, output_messages)
+            
+            # Update Global Metrics for Dashboard (Atomic increments in Redis)
+            queue_service.increment_metric("fraud_dist_low", low_count)
+            queue_service.increment_metric("fraud_dist_medium", medium_count)
+            queue_service.increment_metric("fraud_dist_high", high_count)
+            queue_service.increment_metric("total_txns_scored", len(messages))
             
             total_inferred += len(messages)
             elapsed = time.time() - start_time
