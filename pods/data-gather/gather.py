@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Pod 1: Data Generator (Optimized)
-Generates synthetic credit card transactions for fraud detection demo.
-Optimizations:
-- Vectorized generation (kept from original)
-- Efficient timestamp handling (no string conversion)
-- Optimized data types (Float32, Int32)
+Pod 1: Data Generator (Continuous Mode)
+Generates synthetic credit card transactions continuously.
+Features:
+- Continuous generation with rate limiting
+- Queue-based publishing
+- Backlog-aware throttling
+- FlashBlade archiving
 """
 
 import os
@@ -14,25 +15,39 @@ import time
 import signal
 import subprocess
 import pickle
-import psutil
 import threading
 from pathlib import Path
 from datetime import datetime
 
+# Optional: psutil for resource monitoring
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
-import psutil
 import json
+
+# Import queue and config
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from queue_interface import get_queue_service
+from config_contract import QueueTopics, StoragePaths, GenerationRateLimits, BacklogThresholds
 
 STOP_FLAG = False
 
 def get_process_memory():
-    process = psutil.Process(os.getpid())
-    return process.memory_info().rss / (1024 * 1024)  # MB
+    if PSUTIL_AVAILABLE:
+        process = psutil.Process(os.getpid())
+        return process.memory_info().rss / (1024 * 1024)  # MB
+    return 0.0
 
 def get_cpu_usage():
-    return psutil.cpu_percent(interval=None)
+    if PSUTIL_AVAILABLE:
+        return psutil.cpu_percent(interval=None)
+    return 0.0
 
 # Transaction categories with realistic distribution
 CATEGORIES = [
@@ -63,14 +78,14 @@ STATE_WEIGHTS = np.array([
 
 # String pool sizes for Faker-generated data
 POOL_SIZES = {
-    'first': 10_000,
-    'last': 15_000,
-    'street': 50_000,
-    'city': 10_000,
-    'merchant': 20_000,
-    'job': 5_000,
-    'trans_num': 100_000,
-    'dob': 25_000,
+    'first': 1_000,
+    'last': 1_500,
+    'street': 5_000,
+    'city': 1_000,
+    'merchant': 2_000,
+    'job': 500,
+    'trans_num': 10_000,
+    'dob': 2_500,
 }
 
 
@@ -236,7 +251,10 @@ schema = pa.schema([
 ])
 
 try:
-    while (time.time() - start) < duration:
+    # Continuous mode if duration is 0
+    is_continuous = (duration == 0)
+    
+    while is_continuous or (time.time() - start) < duration:
         data = generate_chunk(pools, chunk_size, rng, fraud_rate, base_time)
         table = pa.Table.from_pydict(data, schema=schema)
         output_file = output_dir / f"worker_{worker_id:03d}_{file_count:05d}.parquet"
@@ -255,24 +273,40 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
     
     # Configuration
-    output_dir = Path(os.getenv('OUTPUT_DIR', 'fraud_dectection_anuuj_output'))
-    num_workers = int(os.getenv('NUM_WORKERS', '16')) # Default lower for typical dev envs
-    duration = int(os.getenv('DURATION_SECONDS', '10'))
-    chunk_size = int(os.getenv('CHUNK_SIZE', '100000'))
+    output_dir = StoragePaths.get_path('raw_data')
+    num_workers = int(os.getenv('NUM_WORKERS', '4'))  # Reduced for continuous mode
+    chunk_size = int(os.getenv('CHUNK_SIZE', '50000'))  # Smaller batches
     fraud_rate = float(os.getenv('FRAUD_RATE', '0.005'))
+    
+    # NEW: Continuous mode configuration
+    continuous_mode = os.getenv('CONTINUOUS_MODE', 'true').lower() == 'true'
+    target_rate = int(os.getenv('GENERATION_RATE', str(GenerationRateLimits.DEFAULT_RATE)))
+    backlog_threshold = BacklogThresholds.THRESHOLDS[QueueTopics.RAW_TRANSACTIONS]['warning']
+    
+    # Set duration (0 for continuous mode)
+    if continuous_mode:
+        duration = 0  # Continuous mode (no time limit)
+    else:
+        duration = int(os.getenv('DURATION_SECONDS', '300'))  # Default 5 minutes
+    
+    # Queue service
+    queue_service = get_queue_service()
     
     # Create timestamped output directory
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     run_path = output_dir / f"run_{timestamp}"
     run_path.mkdir(parents=True, exist_ok=True)
     
+    # Print configuration
     log("=" * 70)
-    log("Pod 1: Optimized Fraud Data Generator")
+    log("Pod 1: Continuous Fraud Data Generator")
     log("=" * 70)
     log(f"Output:   {run_path}")
     log(f"Workers:  {num_workers}")
-    log(f"Duration: {duration}s")
+    log(f"Mode:     {'Continuous' if continuous_mode else 'Batch'}")
+    log(f"Target Rate: {target_rate:,} rows/sec")
     log(f"Chunk:    {chunk_size:,} rows")
+    log(f"Backlog Threshold: {backlog_threshold:,}")
     log("-" * 70)
     
     # Generate string pools
@@ -295,12 +329,29 @@ def main():
     last_bytes = 0
     last_time = start_time
     
+    # NEW: Continuous generation loop with backlog checking
+    batch_count = 0
+    total_rows_generated = 0
+    
     while not STOP_FLAG:
         elapsed = time.time() - start_time
         running = sum(1 for p in processes if p.poll() is None)
         
-        if elapsed >= duration + 2 or running == 0:
-            break
+        # Check if we should continue (continuous mode or duration not exceeded)
+        if not continuous_mode:
+            duration = int(os.getenv('DURATION_SECONDS', '10'))
+            if elapsed >= duration + 2 or running == 0:
+                break
+        
+        # NEW: Check backlog and throttle if needed
+        try:
+            backlog = queue_service.get_backlog(QueueTopics.RAW_TRANSACTIONS)
+            if backlog > backlog_threshold:
+                log(f"⚠️  Backlog too high ({backlog:,}), pausing generation...")
+                time.sleep(5)
+                continue
+        except:
+            backlog = 0
         
         # Update stats every 1 second for live dashboard
         if time.time() - last_time >= 1.0:
@@ -310,21 +361,59 @@ def main():
             speed = ((current_bytes - last_bytes) / (1024**3)) / interval
             total_gb = current_bytes / (1024**3)
             
+            # NEW: Publish to queue
+            if files:
+                # Read files that are NOT being currently written (older than 2 seconds)
+                stable_files = [f for f in files if time.time() - f.stat().st_mtime > 2.0]
+                
+                if stable_files:
+                    # Read 50 stable files and publish (Hype-accelerated for Redis demo)
+                    recent_files = sorted(stable_files, key=lambda x: x.stat().st_mtime, reverse=True)[:50]
+                    for file in recent_files:
+                        try:
+                            # Read parquet and convert to dict for queue
+                            table = pq.read_table(file)
+                            records = table.to_pydict()
+                            # Convert to list of dicts (row-wise)
+                            num_rows = len(records[list(records.keys())[0]])
+                            
+                            batch_data = []
+                            for i in range(min(num_rows, 10000)):  # Increased batch size to 10K
+                                row = {k: v[i] for k, v in records.items()}
+                                # Convert numpy types to Python types for JSON serialization
+                                row = {k: (int(v) if isinstance(v, (np.integer, np.int64, np.int32)) 
+                                          else float(v) if isinstance(v, (np.floating, np.float32, np.float64))
+                                          else str(v) if isinstance(v, (np.str_, bytes))
+                                          else v) for k, v in row.items()}
+                                batch_data.append(row)
+                            
+                            if batch_data:
+                                queue_service.publish_batch(QueueTopics.RAW_TRANSACTIONS, batch_data)
+                                total_rows_generated += len(batch_data)
+                        except Exception as e:
+                            log(f"Error publishing to queue: {e}")
+            
             log(f"[{elapsed:5.1f}s] Files: {len(files):5d} | "
-                f"Size: {total_gb:6.2f} GB | Speed: {speed:5.2f} GB/s | Workers: {running}")
+                f"Size: {total_gb:6.2f} GB | Speed: {speed:5.2f} GB/s | Workers: {running} | Backlog: {backlog:,}")
             
             # Resource Monitoring
             try:
-                cpu_percent = psutil.cpu_percent(interval=None)
-                mem_info = psutil.virtual_memory()
-                mem_gb = mem_info.used / (1024**3)
-                log(f"        CPU: {cpu_percent:5.1f}% | RAM: {mem_info.percent:5.1f}% ({mem_gb:.1f} GB)")
-                
-                # Update Dashboard Stats
-                total_rows = len(files) * chunk_size
-                throughput = total_rows / elapsed if elapsed > 0 else 0
-                cpu_cores = (cpu_percent / 100.0) * psutil.cpu_count()
-                log_telemetry(total_rows, throughput, elapsed, cpu_cores, mem_gb, mem_info.percent)
+                if PSUTIL_AVAILABLE:
+                    cpu_percent = psutil.cpu_percent(interval=None)
+                    mem_info = psutil.virtual_memory()
+                    mem_gb = mem_info.used / (1024**3)
+                    log(f"        CPU: {cpu_percent:5.1f}% | RAM: {mem_info.percent:5.1f}% ({mem_gb:.1f} GB) | Queue Published: {total_rows_generated:,}")
+                    
+                    # Update Dashboard Stats
+                    total_rows = len(files) * chunk_size
+                    throughput = total_rows / elapsed if elapsed > 0 else 0
+                    cpu_cores = (cpu_percent / 100.0) * psutil.cpu_count()
+                    log_telemetry(total_rows, throughput, elapsed, cpu_cores, mem_gb, mem_info.percent)
+                else:
+                    # No psutil, use basic metrics
+                    total_rows = len(files) * chunk_size
+                    throughput = total_rows / elapsed if elapsed > 0 else 0
+                    log_telemetry(total_rows, throughput, elapsed, 0.0, 0.0, 0.0)
             except:
                 pass
 
@@ -368,18 +457,21 @@ def main():
     throughput_rows = total_rows / elapsed_total if elapsed_total > 0 else 0
     
     log(f"METRICS: Rows={total_rows} | Time={elapsed_total:.2f}s | Throughput={throughput_rows:.1f} rows/s | Size={total_gb:.2f} GB")
+    
     # Add explicit resource summary
-    mem_info = psutil.virtual_memory()
-    mem_gb = mem_info.used / (1024 ** 3)
+    if PSUTIL_AVAILABLE:
+        mem_info = psutil.virtual_memory()
+        mem_gb = mem_info.used / (1024 ** 3)
+        
+        # Calculate Cores used
+        # cpu_percent is 0-100 system wide. 
+        # To get "Cores", generally for a process we sum per-cpu. 
+        # For system wide, 100% = All Cores. 
+        # So (percent / 100) * total_cores
+        cpu_cores = (psutil.cpu_percent() / 100.0) * psutil.cpu_count()
+        
+        log(f"METRICS: CPU={cpu_cores:.1f} Cores | RAM={mem_info.percent:.1f}% ({mem_gb:.2f} GB)")
     
-    # Calculate Cores used
-    # cpu_percent is 0-100 system wide. 
-    # To get "Cores", generally for a process we sum per-cpu. 
-    # For system wide, 100% = All Cores. 
-    # So (percent / 100) * total_cores
-    cpu_cores = (psutil.cpu_percent() / 100.0) * psutil.cpu_count()
-    
-    log(f"METRICS: CPU={cpu_cores:.1f} Cores | RAM={mem_info.percent:.1f}% ({mem_gb:.2f} GB)")
     log("=" * 70)
     
     # Final Stats update

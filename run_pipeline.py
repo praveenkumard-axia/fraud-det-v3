@@ -1,116 +1,170 @@
 #!/usr/bin/env python3
 """
-Master Orchestration Script - Optimized for No-API Demo
-Supports running individual stages and providing telemetry via stats.json.
+Spearhead Fraud Detection - Continuous Pipeline Orchestrator
+Implements a non-blocking, queue-driven streaming pipeline.
 """
 
 import os
-import subprocess
-import time
 import sys
-import json
-import argparse
+import time
+import subprocess
+import signal
+import threading
 from pathlib import Path
 from datetime import datetime
 
-# Logger to save all output to a file
-class TeeLogger:
-    def __init__(self, filename):
-        self.terminal = sys.stdout
-        self.filename = filename
-        # Ensure log file exists
-        if not Path(filename).exists():
-            with open(filename, "w") as f: f.write("")
-        self.log = open(filename, "a", encoding="utf-8")
+# Set environment variables for all pods and the orchestrator
+os.environ["QUEUE_TYPE"] = "redis"
+os.environ["REDIS_URL"] = "redis://localhost:6379/0"
 
-    def write(self, message):
-        self.terminal.write(message)
-        self.log.write(message)
-        self.log.flush()
+# Import config/contracts
+BASE_DIR = Path(__file__).parent
+sys.path.insert(0, str(BASE_DIR))
+from config_contract import QueueTopics, StoragePaths, GenerationRateLimits
+from queue_interface import get_queue_service
 
-    def flush(self):
-        self.terminal.flush()
-        self.log.flush()
+# Configuration
+PYTHON_EXE = "/home/anuj/Axia/myenv/bin/python"  # Use the virtual environment
+THRESHOLD_TO_START = 100_000  # Records needed before starting downstream (Lowered for fast demo)
+CHECK_INTERVAL = 2              # Seconds between backlog checks
 
-BASE_DIR = Path(__file__).resolve().parent
-LOG_FILE = BASE_DIR / "pipeline_report.txt"
-DATA_OUT = BASE_DIR / "run_data_output"
-FEAT_OUT = BASE_DIR / "run_features_output"
-MODEL_OUT = BASE_DIR / "run_models_output"
-STATS_FILE = BASE_DIR / "stats.json"
+class ProcessManager:
+    def __init__(self):
+        self.processes = {}
+        self.stop_event = threading.Event()
+        self.queue_service = get_queue_service()
+        self.lock = threading.Lock()
 
-ENV = os.environ.copy()
-ENV.update({
-    "INPUT_DIR": str(DATA_OUT),
-    "OUTPUT_DIR": str(DATA_OUT),
-    "OMP_NUM_THREADS": "1"
-})
+    def start_pod(self, name, command, env=None):
+        """Starts a pod process and spawns a thread to read its output."""
+        with self.lock:
+            if name in self.processes:
+                print(f"[{name}] Already running.")
+                return
 
+            # Prepare environment
+            pod_env = os.environ.copy()
+            pod_env["PYTHONUNBUFFERED"] = "1"
+            pod_env["CONTINUOUS_MODE"] = "true"
+            pod_env["QUEUE_TYPE"] = "redis"  # Force redis for cross-process comms
+            if env:
+                pod_env.update(env)
 
-def run_step(step_name, command):
-    print(f"\n>>> STARTING STAGE: {step_name}")
-    print(f"[TELEMETRY] stage={step_name} | status=Running | rows=0 | throughput=0 | elapsed=0.0 | cpu_cores=0.0 | ram_gb=0.0 | ram_percent=0.0", flush=True)
-    print("-" * 60)
-    
-    process = subprocess.Popen(
-        command, shell=True, stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT, env=ENV, text=True
-    )
-    for line in iter(process.stdout.readline, ''):
-        print(line.strip(), flush=True)
-    process.wait()
-    
-    success = process.returncode == 0
-    print("-" * 60)
-    return success
+            print(f">>> LAUNCHING POD: {name}")
+            
+            # Use specific python executable
+            full_command = command.replace("python3", PYTHON_EXE)
+            
+            # Start process
+            process = subprocess.Popen(
+                full_command,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                env=pod_env,
+                cwd=str(BASE_DIR)
+            )
+            
+            self.processes[name] = process
+            
+            # Start log thread
+            thread = threading.Thread(target=self._stream_logs, args=(name, process), daemon=True)
+            thread.start()
+
+    def _stream_logs(self, name, process):
+        """Streams logs from a process with a prefix."""
+        prefix = f"[{name:^12}]"
+        for line in iter(process.stdout.readline, ''):
+            if line:
+                print(f"{prefix} {line.strip()}", flush=True)
+        process.stdout.close()
+
+    def stop_all(self):
+        """Cleanly shuts down all running pods."""
+        print("\n>>> SHUTTING DOWN PIPELINE...")
+        self.stop_event.set()
+        with self.lock:
+            for name, process in self.processes.items():
+                print(f"--- Stopping {name} (PID: {process.pid})")
+                process.send_signal(signal.SIGTERM)
+            
+            # Wait a moment
+            time.sleep(2)
+            
+            # Force kill if still running
+            for name, process in self.processes.items():
+                if process.poll() is None:
+                    process.kill()
+        print(">>> ALL PODS TERMINATED.")
 
 def main():
-    parser = argparse.ArgumentParser(description="Spearhead.so Pipeline Controller")
-    parser.add_argument("--stage", choices=["gather", "prep", "train", "inference", "all"], default="all")
-    args = parser.parse_args()
-
-    # Flush log if starting fresh
-    if args.stage == "all" or not LOG_FILE.exists():
-        with open(LOG_FILE, "w") as f: 
-            f.write(f"--- Session Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
-
-    sys.stdout = TeeLogger(LOG_FILE)
+    manager = ProcessManager()
     
-    # Reset telemetry to zero at the start of each run
-    print(f"[TELEMETRY] stage=Waiting | status=Ready | rows=0 | throughput=0 | elapsed=0.0 | cpu_cores=0.0 | ram_gb=0.0 | ram_percent=0.0", flush=True)
+    # Initialize queue service
+    queue = get_queue_service()
     
-    # 1. Gather
-    if args.stage in ["gather", "all"]:
-        DATA_OUT.mkdir(exist_ok=True)
-        # Use existing gather.py logic
-        success = run_step("Ingest", f"python3 {BASE_DIR}/pods/data-gather/gather.py")
-        if not success: sys.exit(1)
+    # Clear existing queues for a fresh start
+    print(">>> Clearing Redis queues...")
+    queue.clear(QueueTopics.RAW_TRANSACTIONS)
+    queue.clear(QueueTopics.FEATURES_READY)
+    queue.clear(QueueTopics.INFERENCE_RESULTS)
+    queue.clear(QueueTopics.TRAINING_QUEUE)
 
-    # 2. Prepare
-    if args.stage in ["prep", "all"]:
-        DATA_OUT.mkdir(exist_ok=True)
-        FEAT_OUT.mkdir(exist_ok=True)
-        ENV["INPUT_DIR"] = str(DATA_OUT)
-        ENV["OUTPUT_DIR"] = str(FEAT_OUT)
-        success = run_step("Data Prep", f"python3 {BASE_DIR}/pods/data-prep/prepare.py")
-        if not success: sys.exit(1)
+    # Handle Ctrl+C
+    def handle_signal(sig, frame):
+        manager.stop_all()
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, handle_signal)
+    signal.signal(signal.SIGTERM, handle_signal)
 
-    # 3. Train
-    if args.stage in ["train", "all"]:
-        FEAT_OUT.mkdir(exist_ok=True)
-        MODEL_OUT.mkdir(exist_ok=True)
-        ENV["INPUT_DIR"] = str(FEAT_OUT)
-        ENV["OUTPUT_DIR"] = str(MODEL_OUT)
-        success = run_step("Model Train", f"python3 {BASE_DIR}/pods/model-build/train.py")
-        if not success: sys.exit(1)
+    print("="*80)
+    print("  SPEARHEAD CONTINUOUS FRAUD DETECTION PIPELINE (REDIS EDITION)")
+    print("="*80)
+    print(f"Goal: Start Generator, wait for {THRESHOLD_TO_START:,} records in REDIS, then trigger pipeline.")
+    print("Status: DECOUPLED | NON-BLOCKING | REDIS QUEUES")
+    print("="*80)
 
-    # 4. Inference
-    if args.stage in ["inference", "all"]:
-        # Run the inference client (verified)
-        success = run_step("Inference", f"python3 {BASE_DIR}/pods/inference/client.py")
-        if not success: sys.exit(1)
+    # 1. Start the Data Generator immediately
+    manager.start_pod("GENERATOR", "python3 pods/data-gather/gather.py")
 
-    print("\n✅ Execution complete.")
+    # 2. Wait and Monitor Progress
+    downstream_started = False
+    start_time = time.time()
+
+    try:
+        while not manager.stop_event.is_set():
+            # Monitor Redis backlog
+            total_records = queue.get_backlog(QueueTopics.RAW_TRANSACTIONS)
+            
+            elapsed = time.time() - start_time
+            
+            # Print heart-beat status
+            if not downstream_started:
+                progress = (total_records / THRESHOLD_TO_START) * 100
+                print(f"[MONITOR] Redis Backlog: {total_records:,} / {THRESHOLD_TO_START:,} records ({progress:.1f}%) | Elapsed: {elapsed:.1f}s", flush=True)
+
+            # Check if we hit the threshold to start downstream
+            if not downstream_started and total_records >= THRESHOLD_TO_START:
+                print(f"\n{'*'*80}")
+                print(f"*** MILESTONE REACHED: {total_records:,} RECORDS IN REDIS")
+                print(f"*** TRIGGERING DOWNSTREAM STAGES...")
+                print(f"{'*'*80}\n")
+                
+                # Start all downstream pods
+                manager.start_pod("DATA-PREP", "python3 pods/data-prep/prepare.py")
+                manager.start_pod("TRAINING",  "python3 pods/model-build/train.py")
+                manager.start_pod("INFERENCE", "python3 pods/inference/client.py")
+                
+                downstream_started = True
+
+            time.sleep(CHECK_INTERVAL)
+
+    except Exception as e:
+        print(f"Error in Orchestrator: {e}")
+        manager.stop_all()
 
 if __name__ == "__main__":
     main()

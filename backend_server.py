@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Backend Server for Dashboard v4
-Orchestrates 4 pods and aggregates telemetry for real-time dashboard
+Backend Server for Dashboard v5 - Continuous Pipeline
+Orchestrates 4 pods with queue-based communication and real-time control
 """
 
 import os
@@ -15,10 +15,17 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Optional, List
 
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+
+# Import queue and config modules
+from queue_interface import get_queue_service
+from config_contract import (
+    QueueTopics, StoragePaths, ScalingConfig, BacklogThresholds,
+    SystemPriorities, GenerationRateLimits, get_env
+)
 
 # Configuration
 BASE_DIR = Path(__file__).parent
@@ -39,12 +46,20 @@ app.add_middleware(
 
 # ==================== Data Models ====================
 
+class ScaleRequest(BaseModel):
+    replicas: int
+
+class PriorityRequest(BaseModel):
+    priority: str
+
+class ThrottleRequest(BaseModel):
+    rate: int
+
 class ScaleConfig(BaseModel):
-    cpu_prep_pods: int = 1
-    gpu_prep_pods: int = 1
-    cpu_infer_pods: int = 1
-    gpu_infer_pods: int = 1
-    generator_speed: int = 50000
+    preprocessing_pods: int = 1
+    training_pods: int = 1
+    inference_pods: int = 2
+    generation_rate: int = 50000
 
 
 class PipelineState:
@@ -74,6 +89,18 @@ class PipelineState:
         
         # Configuration
         self.scale_config = ScaleConfig()
+        
+        # NEW: Continuous operation state
+        self.generation_rate = GenerationRateLimits.DEFAULT_RATE
+        self.system_priority = SystemPriorities.INFERENCE
+        self.pod_counts = {
+            "preprocessing": 1,
+            "training": 1,
+            "inference": 2
+        }
+        
+        # Queue service
+        self.queue_service = get_queue_service()
         
         # Lock for thread safety
         self.lock = threading.Lock()
@@ -245,8 +272,8 @@ def run_pipeline_sequence():
         # Pod 3: Model Training
         run_pod_async("model-build", str(PODS_DIR / "model-build" / "train.py"))
         
-        # Pod 4: Inference (skip if Triton not available)
-        # run_pod_async("inference", str(PODS_DIR / "inference" / "client.py"))
+        # Pod 4: Inference (requires Triton on port 8001)
+        run_pod_async("inference", str(PODS_DIR / "inference" / "client.py"))
         
     finally:
         state.is_running = False
@@ -278,10 +305,15 @@ def get_dashboard_data():
     seconds = elapsed % 60
     elapsed_str = f"{minutes:02d}:{seconds:04.1f}"
     
-    # Calculate backlog (simulated)
+    # Get REAL queue backlogs
+    raw_backlog = state.queue_service.get_backlog(QueueTopics.RAW_TRANSACTIONS)
+    features_backlog = state.queue_service.get_backlog(QueueTopics.FEATURES_READY)
+    inference_backlog = state.queue_service.get_backlog(QueueTopics.INFERENCE_RESULTS)
+    
+    # Calculate backlog (use queue data)
     total_generated = tel["generated"]
     total_processed = tel["data_prep_cpu"] + tel["data_prep_gpu"]
-    backlog = max(0, total_generated - total_processed)
+    backlog = raw_backlog  # Use actual queue backlog
     
     # Calculate business metrics
     fraud_rate = 0.005
@@ -338,6 +370,19 @@ def get_dashboard_data():
             "elapsed": elapsed_str,
             "stage": tel["current_stage"],
             "status": tel["current_status"]
+        },
+        # NEW: Queue backlogs
+        "queue_backlogs": {
+            "raw_transactions": raw_backlog,
+            "features_ready": features_backlog,
+            "inference_results": inference_backlog
+        },
+        # NEW: Pod counts
+        "pod_counts": state.pod_counts.copy(),
+        # NEW: System configuration
+        "system_config": {
+            "generation_rate": state.generation_rate,
+            "priority": state.system_priority
         }
     }
 
@@ -399,7 +444,221 @@ async def scale_pods(config: ScaleConfig):
 @app.get("/api/control/scale")
 async def get_scale_config():
     """Get current scaling configuration"""
-    return state.scale_config.dict()
+    return {
+        "preprocessing_pods": state.pod_counts["preprocessing"],
+        "training_pods": state.pod_counts["training"],
+        "inference_pods": state.pod_counts["inference"],
+        "generation_rate": state.generation_rate
+    }
+
+
+# ==================== NEW ENDPOINTS ====================
+
+@app.post("/api/control/scale/preprocessing")
+async def scale_preprocessing(request: ScaleRequest):
+    """Scale preprocessing pods"""
+    replicas = request.replicas
+    
+    # Validate
+    config = ScalingConfig.DEPLOYMENTS["preprocessing"]
+    if replicas < config["min_replicas"] or replicas > config["max_replicas"]:
+        return {
+            "success": False,
+            "error": f"Replicas must be between {config['min_replicas']} and {config['max_replicas']}"
+        }
+    
+    state.pod_counts["preprocessing"] = replicas
+    
+    # DevOps will implement actual kubectl scaling
+    # For now, just update state
+    return {
+        "success": True,
+        "deployment": "preprocessing",
+        "replicas": replicas,
+        "message": f"Preprocessing scaled to {replicas} pods"
+    }
+
+
+@app.post("/api/control/scale/training")
+async def scale_training(request: ScaleRequest):
+    """Scale training pods"""
+    replicas = request.replicas
+    
+    config = ScalingConfig.DEPLOYMENTS["training"]
+    if replicas < config["min_replicas"] or replicas > config["max_replicas"]:
+        return {
+            "success": False,
+            "error": f"Replicas must be between {config['min_replicas']} and {config['max_replicas']}"
+        }
+    
+    state.pod_counts["training"] = replicas
+    
+    return {
+        "success": True,
+        "deployment": "training",
+        "replicas": replicas,
+        "message": f"Training scaled to {replicas} pods"
+    }
+
+
+@app.post("/api/control/scale/inference")
+async def scale_inference(request: ScaleRequest):
+    """Scale inference pods"""
+    replicas = request.replicas
+    
+    config = ScalingConfig.DEPLOYMENTS["inference"]
+    if replicas < config["min_replicas"] or replicas > config["max_replicas"]:
+        return {
+            "success": False,
+            "error": f"Replicas must be between {config['min_replicas']} and {config['max_replicas']}"
+        }
+    
+    state.pod_counts["inference"] = replicas
+    
+    return {
+        "success": True,
+        "deployment": "inference",
+        "replicas": replicas,
+        "message": f"Inference scaled to {replicas} pods"
+    }
+
+
+@app.post("/api/control/priority")
+async def set_priority(request: PriorityRequest):
+    """Set system priority: inference or training"""
+    priority = request.priority
+    
+    if priority not in SystemPriorities.VALID_PRIORITIES:
+        return {
+            "success": False,
+            "error": f"Priority must be one of: {SystemPriorities.VALID_PRIORITIES}"
+        }
+    
+    state.system_priority = priority
+    
+    return {
+        "success": True,
+        "priority": priority,
+        "message": f"System priority set to {priority}"
+    }
+
+
+@app.get("/api/control/priority")
+async def get_priority():
+    """Get current system priority"""
+    return {
+        "priority": state.system_priority
+    }
+
+
+@app.post("/api/control/throttle")
+async def throttle_generation(request: ThrottleRequest):
+    """Adjust data generation rate"""
+    rate = request.rate
+    
+    if rate < GenerationRateLimits.MIN_RATE or rate > GenerationRateLimits.MAX_RATE:
+        return {
+            "success": False,
+            "error": f"Rate must be between {GenerationRateLimits.MIN_RATE} and {GenerationRateLimits.MAX_RATE}"
+        }
+    
+    state.generation_rate = rate
+    
+    return {
+        "success": True,
+        "rate": rate,
+        "message": f"Generation rate set to {rate} rows/sec"
+    }
+
+
+@app.get("/api/control/throttle")
+async def get_throttle():
+    """Get current generation rate"""
+    return {
+        "rate": state.generation_rate
+    }
+
+
+@app.get("/api/backlog/status")
+async def get_backlog_status():
+    """Get queue backlog for all stages"""
+    return {
+        "raw_transactions": state.queue_service.get_backlog(QueueTopics.RAW_TRANSACTIONS),
+        "features_ready": state.queue_service.get_backlog(QueueTopics.FEATURES_READY),
+        "inference_results": state.queue_service.get_backlog(QueueTopics.INFERENCE_RESULTS),
+        "training_queue": state.queue_service.get_backlog(QueueTopics.TRAINING_QUEUE),
+        "timestamp": time.time()
+    }
+
+
+@app.get("/api/backlog/pressure")
+async def get_backlog_pressure():
+    """Get backlog pressure metrics and alerts"""
+    backlogs = {
+        QueueTopics.RAW_TRANSACTIONS: state.queue_service.get_backlog(QueueTopics.RAW_TRANSACTIONS),
+        QueueTopics.FEATURES_READY: state.queue_service.get_backlog(QueueTopics.FEATURES_READY),
+        QueueTopics.INFERENCE_RESULTS: state.queue_service.get_backlog(QueueTopics.INFERENCE_RESULTS)
+    }
+    
+    pressure = {}
+    alerts = []
+    
+    for topic, backlog in backlogs.items():
+        thresholds = BacklogThresholds.THRESHOLDS.get(topic, {})
+        warning = thresholds.get("warning", float('inf'))
+        critical = thresholds.get("critical", float('inf'))
+        
+        # Calculate pressure percentage (0-100)
+        pressure_pct = min(100, (backlog / critical * 100) if critical > 0 else 0)
+        pressure[topic] = pressure_pct
+        
+        # Generate alerts
+        if backlog >= critical:
+            alerts.append({
+                "level": "critical",
+                "topic": topic,
+                "backlog": backlog,
+                "action": thresholds.get("action", "none")
+            })
+        elif backlog >= warning:
+            alerts.append({
+                "level": "warning",
+                "topic": topic,
+                "backlog": backlog,
+                "action": thresholds.get("action", "none")
+            })
+    
+    return {
+        "pressure": pressure,
+        "alerts": alerts,
+        "timestamp": time.time()
+    }
+
+
+@app.websocket("/ws/metrics")
+async def websocket_metrics(websocket: WebSocket):
+    """Stream real-time metrics via WebSocket"""
+    await websocket.accept()
+    
+    try:
+        while True:
+            # Get dashboard data
+            data = get_dashboard_data()
+            
+            # Add backlog info
+            backlog_status = await get_backlog_status()
+            data["backlog"] = backlog_status
+            
+            # Send to client
+            await websocket.send_json(data)
+            
+            # Wait 1 second before next update
+            await asyncio.sleep(1)
+    
+    except WebSocketDisconnect:
+        print("WebSocket client disconnected")
+    except Exception as e:
+        print(f"WebSocket error: {e}")
 
 
 # ==================== Server Startup ====================

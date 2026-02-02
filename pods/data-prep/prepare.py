@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Pod 2: Feature Engineering (Optimized)
+Pod 2: Feature Engineering (Continuous Streaming Mode)
 Data preparation using Polars (CPU) or RAPIDS cuDF (GPU).
-Optimizations:
-- Polars used for CPU processing (multithreaded, lazy evaluation).
-- Automatic backend selection (GPU if available, else Polars).
-- Removed redundant "comparison" runs.
+Features:
+- Continuous streaming processing
+- Queue-based input/output
+- Micro-batch processing
+- Dual output: Queue + FlashBlade
 """
 
 import os
@@ -20,6 +21,11 @@ from typing import List, Set, Tuple
 
 import numpy as np
 import psutil
+
+# Import queue and config
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from queue_interface import get_queue_service
+from config_contract import QueueTopics, StoragePaths
 
 # Try importing GPU libraries
 try:
@@ -85,8 +91,8 @@ STRING_COLUMNS_TO_DROP = [
 
 class DataPrepService:
     def __init__(self):
-        self.input_dir = Path(os.getenv('INPUT_DIR', 'fraud_dectection_anuuj_output'))
-        self.output_dir = Path(os.getenv('OUTPUT_DIR', 'fraud_dectection_anuuj_features'))
+        self.input_dir = StoragePaths.get_path('raw_data')
+        self.output_dir = StoragePaths.get_path('features')
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         self.state_file = self.output_dir / ".prep_state.json"
@@ -94,12 +100,19 @@ class DataPrepService:
         
         self.gpu_mode = GPU_AVAILABLE and (os.getenv('FORCE_CPU', 'false').lower() != 'true')
         
+        # NEW: Queue service
+        self.queue_service = get_queue_service()
+        self.continuous_mode = os.getenv('CONTINUOUS_MODE', 'true').lower() == 'true'
+        self.batch_size = int(os.getenv('BATCH_SIZE', '10000'))
+        
         log("=" * 70)
-        log("Pod 2: Feature Engineering (Optimized)")
+        log("Pod 2: Feature Engineering (Continuous Streaming)")
         log("=" * 70)
         log(f"Input:    {self.input_dir}")
         log(f"Output:   {self.output_dir}")
         log(f"Backend:  {'RAPIDS cuDF (GPU)' if self.gpu_mode else 'Polars (CPU)'}")
+        log(f"Mode:     {'Continuous' if self.continuous_mode else 'Batch'}")
+        log(f"Batch Size: {self.batch_size:,}")
         log("=" * 70)
 
         if self.gpu_mode:
@@ -241,14 +254,107 @@ class DataPrepService:
         # In a real deployment, would paste the full GPU logic here.
         log("GPU processing placeholder - would execute dask_cudf flow here.")
         
-    def run(self):
+    def run_continuous(self):
+        """Continuous streaming mode - consume from queue"""
+        log("Starting continuous streaming mode...")
+        
+        total_processed = 0
+        start_time = time.time()
+        
         while not STOP_FLAG:
-            self.process_run_loop()
-            time.sleep(5)
-            
-            # For the demo, just exit after one loop if no new runs
-            if not self.get_pending_runs():
-                break
+            try:
+                # Consume batch from queue
+                messages = self.queue_service.consume_batch(
+                    QueueTopics.RAW_TRANSACTIONS,
+                    batch_size=self.batch_size,
+                    timeout=1.0
+                )
+                
+                if not messages:
+                    time.sleep(0.5)
+                    continue
+                
+                log(f"Processing batch of {len(messages):,} records...")
+                
+                # Convert to Polars DataFrame
+                df = pl.DataFrame(messages)
+                
+                # Apply feature engineering
+                df = self._apply_features(df)
+                
+                # Convert back to list of dicts for queue
+                processed_data = df.to_dicts()
+                
+                # Publish to features queue
+                self.queue_service.publish_batch(QueueTopics.FEATURES_READY, processed_data)
+                
+                # Also write to FlashBlade for archiving
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                output_file = self.output_dir / f"features_batch_{timestamp}.parquet"
+                df.write_parquet(output_file, compression='snappy')
+                
+                total_processed += len(messages)
+                elapsed = time.time() - start_time
+                throughput = total_processed / elapsed if elapsed > 0 else 0
+                
+                # Update telemetry
+                cpu_percent = psutil.cpu_percent()
+                cpu_cores = (cpu_percent / 100.0) * psutil.cpu_count()
+                mem_info = psutil.virtual_memory()
+                mem_gb = mem_info.used / (1024 ** 3)
+                
+                log(f"Processed: {total_processed:,} | Throughput: {throughput:,.0f} rows/sec")
+                log_telemetry(total_processed, throughput, elapsed, cpu_cores, mem_gb, mem_info.percent)
+                
+            except Exception as e:
+                log(f"Error in continuous processing: {e}")
+                time.sleep(1)
+    
+    def _apply_features(self, df: pl.DataFrame) -> pl.DataFrame:
+        """Apply feature engineering to DataFrame"""
+        # Amount features
+        df = df.with_columns([
+            pl.col("amt").log1p().alias("amt_log"),
+        ])
+        
+        # Time features (if unix_time exists)
+        schema_cols = df.columns
+        if "unix_time" in schema_cols:
+            df = df.with_columns([
+                (pl.col("unix_time") / 3600 % 24).cast(pl.Int8).alias("hour_of_day"),
+                (pl.col("unix_time") / 86400 % 7).cast(pl.Int8).alias("day_of_week")
+            ]).with_columns([
+                (pl.col("day_of_week") >= 5).cast(pl.Int8).alias("is_weekend"),
+                ((pl.col("hour_of_day") >= 22) | (pl.col("hour_of_day") <= 6)).cast(pl.Int8).alias("is_night")
+            ])
+        
+        # Distance features
+        if all(x in schema_cols for x in ["lat", "long", "merch_lat", "merch_long"]):
+            df = df.with_columns([
+                (((pl.col("merch_lat") - pl.col("lat")) * 111.0).pow(2) + 
+                 ((pl.col("merch_long") - pl.col("long")) * 85.0).pow(2)).sqrt().alias("distance_km")
+            ])
+        
+        # Drop string columns
+        current_cols = df.columns
+        cols_to_keep = [c for c in current_cols if c not in STRING_COLUMNS_TO_DROP]
+        df = df.select(cols_to_keep)
+        
+        return df
+    
+    def run(self):
+        """Run in appropriate mode"""
+        if self.continuous_mode:
+            self.run_continuous()
+        else:
+            # Original batch mode
+            while not STOP_FLAG:
+                self.process_run_loop()
+                time.sleep(5)
+                
+                # For the demo, just exit after one loop if no new runs
+                if not self.get_pending_runs():
+                    break
 
     def process_run_loop(self) -> Tuple[int, float]:
         total_rows = 0

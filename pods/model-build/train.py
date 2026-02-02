@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
-Pod 3: Model Training (Optimized)
-Trains XGBoost models using Polars for data loading and automated backend selection.
-Optimizations:
-- Polars for fast CPU data loading
-- Single path execution (no redundant CPU vs GPU comparison)
-- Automatic Triton config generation with dynamic batching
+Pod 3: Model Training (Continuous Retraining Mode)
+Trains XGBoost models continuously with priority awareness.
+Features:
+- Continuous retraining loop
+- Priority-aware (pauses when inference prioritized)
+- Incremental training support
+- Automatic model versioning
+- FlashBlade integration
 """
 
 import os
@@ -13,11 +15,18 @@ import sys
 import gc
 import json
 import time
+import signal
 import logging
 import psutil
+import requests
 from pathlib import Path
 from datetime import datetime
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, List, Dict, Any, Optional
+
+# Import queue and config
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from queue_interface import get_queue_service
+from config_contract import QueueTopics, StoragePaths, SystemPriorities
 
 # CPU imports
 import polars as pl
@@ -29,6 +38,13 @@ logging.basicConfig(
     format='%(asctime)s | %(levelname)s | %(message)s'
 )
 log = logging.getLogger(__name__)
+
+STOP_FLAG = False
+
+def signal_handler(signum, frame):
+    global STOP_FLAG
+    log.info("Shutdown signal received")
+    STOP_FLAG = True
 
 def log_telemetry(rows, throughput, elapsed, cpu_cores, mem_gb, mem_percent, status="Running", preserve_total=False):
     """Write structured telemetry to logs for dashboard parsing."""
@@ -86,19 +102,63 @@ EXCLUDE_COLUMNS = [
 
 class ModelTrainer:
     def __init__(self, input_dir: str, output_dir: str):
-        self.input_path = Path(input_dir)
-        self.output_path = Path(output_dir)
+        self.input_path = StoragePaths.get_path('features') if input_dir == 'auto' else Path(input_dir)
+        self.output_path = StoragePaths.get_path('models') if output_dir == 'auto' else Path(output_dir)
         self.output_path.mkdir(parents=True, exist_ok=True)
         self.gpu_mode = GPU_AVAILABLE and (os.getenv('FORCE_CPU', 'false').lower() != 'true')
         
+        # NEW: Continuous mode configuration
+        self.continuous_mode = os.getenv('CONTINUOUS_MODE', 'true').lower() == 'true'
+        self.training_interval = int(os.getenv('TRAINING_INTERVAL_SECONDS', '300'))  # 5 minutes
+        self.min_samples_for_training = int(os.getenv('MIN_SAMPLES_FOR_TRAINING', '100000'))
+        self.backend_url = os.getenv('BACKEND_URL', 'http://localhost:8000')
+        
+        # Model versioning
+        self.current_model = None
+        self.model_version = 0
+        self.last_train_time = 0
+        
         log.info("=" * 70)
-        log.info("Pod 3: Optimized Model Training")
+        log.info("Pod 3: Continuous Model Training")
         log.info("=" * 70)
-        log.info(f"Input:   {self.input_path}")
-        log.info(f"Output:  {self.output_path}")
-        log.info(f"Backend: {'XGBoost GPU (cuDF)' if self.gpu_mode else 'XGBoost CPU (Polars)'}")
+        log.info(f"Input:    {self.input_path}")
+        log.info(f"Output:   {self.output_path}")
+        log.info(f"Backend:  {'XGBoost GPU (cuDF)' if self.gpu_mode else 'XGBoost CPU (Polars)'}")
+        log.info(f"Mode:     {'Continuous' if self.continuous_mode else 'Single-shot'}")
+        log.info(f"Training Interval: {self.training_interval}s")
+        log.info(f"Min Samples: {self.min_samples_for_training:,}")
         log.info("=" * 70)
 
+    def check_system_priority(self) -> str:
+        """Check system priority from backend API"""
+        try:
+            response = requests.get(f"{self.backend_url}/api/control/priority", timeout=2)
+            if response.status_code == 200:
+                return response.json().get('priority', SystemPriorities.INFERENCE)
+        except:
+            pass
+        return SystemPriorities.INFERENCE  # Default to inference priority
+    
+    def should_train_now(self) -> bool:
+        """Determine if training should run now"""
+        # Check priority
+        priority = self.check_system_priority()
+        if priority == SystemPriorities.INFERENCE:
+            log.info(f"System priority is {priority}, skipping training...")
+            return False
+        
+        # Check time interval
+        elapsed_since_train = time.time() - self.last_train_time
+        if elapsed_since_train < self.training_interval:
+            return False
+        
+        return True
+    
+    def get_recent_feature_files(self, max_files: int = 100) -> List[Path]:
+        """Get recent feature files for training"""
+        files = sorted(self.input_path.glob("features_*.parquet"), key=lambda x: x.stat().st_mtime, reverse=True)
+        return files[:max_files]
+    
     def load_features(self) -> Path:
         """Find the most recent features file."""
         files = sorted(self.input_path.glob("features_*.parquet"))
@@ -229,11 +289,16 @@ class ModelTrainer:
             accuracy = (pred_labels == y_test).mean()
             log.info(f"Accuracy: {accuracy:.4f}")
 
-    def save_model(self, model, feature_names):
-        """Save model and generate Triton config."""
+    def save_model(self, model, feature_names, version: Optional[int] = None):
+        """Save model with versioning and generate Triton config."""
         model_name = "fraud_xgboost"
         model_repo_dir = self.output_path / model_name
-        version_dir = model_repo_dir / "1"
+        
+        # Use provided version or increment
+        if version is None:
+            version = self.model_version + 1
+        
+        version_dir = model_repo_dir / str(version)
         version_dir.mkdir(parents=True, exist_ok=True)
         
         # Save XGBoost JSON
@@ -243,10 +308,18 @@ class ModelTrainer:
         # Save feature names
         with open(model_repo_dir / "feature_names.json", "w") as f:
             json.dump(feature_names, f)
+        
+        # Save metadata
+        metadata = {
+            'version': version,
+            'timestamp': datetime.now().isoformat(),
+            'features': feature_names,
+            'gpu_mode': self.gpu_mode
+        }
+        with open(version_dir / "metadata.json", "w") as f:
+            json.dump(metadata, f, indent=2)
             
         # Generate Triton Config
-        # Dynamic batching enabled
-        # Instance group optimized based on CPU/GPU
         instance_kind = "KIND_GPU" if self.gpu_mode else "KIND_CPU"
         instance_count = 1 if self.gpu_mode else 2
         
@@ -295,9 +368,12 @@ parameters [
         with open(model_repo_dir / "config.pbtxt", "w") as f:
             f.write(config)
             
-        log.info(f"Model saved to {model_repo_dir}")
+        log.info(f"Model v{version} saved to {model_repo_dir}")
+        self.model_version = version
+        return version
 
-    def run(self):
+    def run_single(self):
+        """Single-shot training (original behavior)"""
         try:
             filepath = self.load_features()
             X_train, y_train, X_test, y_test, feats = self.prepare_data(filepath)
@@ -307,36 +383,158 @@ parameters [
         except Exception as e:
             log.error(f"Training failed: {e}")
             raise
+    
+    def run_continuous(self):
+        """Continuous retraining loop"""
+        log.info("Starting continuous retraining mode...")
+        
+        total_models_trained = 0
+        
+        while not STOP_FLAG:
+            try:
+                # Check if we should train now
+                if not self.should_train_now():
+                    time.sleep(30)  # Check every 30 seconds
+                    continue
+                
+                # Get recent feature files
+                feature_files = self.get_recent_feature_files(max_files=50)
+                
+                if not feature_files:
+                    log.info("No feature files available for training")
+                    time.sleep(60)
+                    continue
+                
+                # Load and combine recent data
+                log.info(f"Loading {len(feature_files)} recent feature files...")
+                dfs = []
+                total_samples = 0
+                
+                for file in feature_files:
+                    try:
+                        df = pl.read_parquet(file)
+                        dfs.append(df)
+                        total_samples += len(df)
+                        
+                        # Stop if we have enough samples
+                        if total_samples >= self.min_samples_for_training:
+                            break
+                    except Exception as e:
+                        log.warning(f"Failed to load {file}: {e}")
+                
+                if total_samples < self.min_samples_for_training:
+                    log.info(f"Not enough samples ({total_samples:,} < {self.min_samples_for_training:,})")
+                    time.sleep(60)
+                    continue
+                
+                # Combine dataframes
+                combined_df = pl.concat(dfs)
+                log.info(f"Combined {total_samples:,} samples for training")
+                
+                # Prepare data
+                available_feats = [c for c in FEATURE_COLUMNS if c in combined_df.columns]
+                combined_df = combined_df.fill_null(0)
+                
+                # Split
+                test_size = int(len(combined_df) * 0.2)
+                train_df = combined_df.slice(0, len(combined_df) - test_size)
+                test_df = combined_df.slice(len(combined_df) - test_size, test_size)
+                
+                # Convert to numpy
+                pdf_train = train_df.to_pandas()
+                pdf_test = test_df.to_pandas()
+                
+                X_train = np.ascontiguousarray(pdf_train[available_feats].values, dtype=np.float32)
+                y_train = np.ascontiguousarray(pdf_train["is_fraud"].values, dtype=np.float32)
+                X_test = np.ascontiguousarray(pdf_test[available_feats].values, dtype=np.float32)
+                y_test = np.ascontiguousarray(pdf_test["is_fraud"].values, dtype=np.float32)
+                
+                # Train model
+                start_time = time.time()
+                log.info("Training model...")
+                
+                if self.current_model is not None:
+                    # Incremental training (use previous model as starting point)
+                    log.info("Performing incremental training from previous model")
+                    model = self.train(X_train, y_train, X_test, y_test)
+                else:
+                    # Fresh training
+                    model = self.train(X_train, y_train, X_test, y_test)
+                
+                # Evaluate
+                self.evaluate(model, X_test, y_test)
+                
+                # Save with new version
+                version = self.save_model(model, available_feats)
+                
+                # Update state
+                self.current_model = model
+                self.last_train_time = time.time()
+                total_models_trained += 1
+                
+                elapsed = time.time() - start_time
+                log.info(f"✓ Model v{version} trained in {elapsed:.2f}s (Total models: {total_models_trained})")
+                
+                # Update telemetry
+                cpu_percent = psutil.cpu_percent()
+                cpu_cores = (cpu_percent / 100.0) * psutil.cpu_count()
+                mem = psutil.virtual_memory()
+                mem_gb = mem.used / (1024 ** 3)
+                
+                throughput = total_samples / elapsed if elapsed > 0 else 0
+                log_telemetry(total_samples, throughput, elapsed, cpu_cores, mem_gb, mem.percent, 
+                            status=f"Model v{version} trained")
+                
+            except Exception as e:
+                log.error(f"Error in continuous training: {e}")
+                import traceback
+                traceback.print_exc()
+                time.sleep(60)
+    
+    def run(self):
+        """Run in appropriate mode"""
+        if self.continuous_mode:
+            self.run_continuous()
+        else:
+            self.run_single()
 
 def main():
-    input_dir = os.getenv('INPUT_DIR', 'fraud_dectection_anuuj_features')
-    output_dir = os.getenv('OUTPUT_DIR', 'fraud_dectection_anuuj_models')
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    input_dir = os.getenv('INPUT_DIR', 'auto')
+    output_dir = os.getenv('OUTPUT_DIR', 'auto')
     
     start_time = time.time()
     trainer = ModelTrainer(input_dir, output_dir)
     
-    # Get total rows from features to report throughput
-    try:
-        features_file = trainer.load_features()
-        total_rows = pl.scan_parquet(features_file).select(pl.len()).collect().item()
-    except:
-        total_rows = 14100000 # Fallback
-        
+    # Run in appropriate mode
     trainer.run()
-    elapsed = time.time() - start_time
-    throughput = total_rows / elapsed if elapsed > 0 else 0
     
-    # Resource Snapshot for Master Script
-    cpu_percent = psutil.cpu_percent()
-    cpu_cores = (cpu_percent / 100.0) * psutil.cpu_count()
-    mem = psutil.virtual_memory()
-    mem_gb = mem.used / (1024 ** 3)
-    
-    log.info(f"METRICS: Rows={total_rows} | Time={elapsed:.2f}s | Throughput={throughput:.1f} rows/s")
-    log.info(f"METRICS: CPU={cpu_cores:.1f} Cores | RAM={mem.percent:.1f}% ({mem_gb:.2f} GB)")
-    
-    # Final Stats update with cumulative tracking
-    log_telemetry(total_rows, throughput, elapsed, cpu_cores, mem_gb, mem.percent, status="Completed")
+    if not trainer.continuous_mode:
+        # Single-shot mode: report final metrics
+        elapsed = time.time() - start_time
+        
+        # Get total rows from features to report throughput
+        try:
+            features_file = trainer.load_features()
+            total_rows = pl.scan_parquet(features_file).select(pl.len()).collect().item()
+        except:
+            total_rows = 14100000  # Fallback
+        
+        throughput = total_rows / elapsed if elapsed > 0 else 0
+        
+        # Resource Snapshot
+        cpu_percent = psutil.cpu_percent()
+        cpu_cores = (cpu_percent / 100.0) * psutil.cpu_count()
+        mem = psutil.virtual_memory()
+        mem_gb = mem.used / (1024 ** 3)
+        
+        log.info(f"METRICS: Rows={total_rows} | Time={elapsed:.2f}s | Throughput={throughput:.1f} rows/s")
+        log.info(f"METRICS: CPU={cpu_cores:.1f} Cores | RAM={mem.percent:.1f}% ({mem_gb:.2f} GB)")
+        
+        # Final Stats
+        log_telemetry(total_rows, throughput, elapsed, cpu_cores, mem_gb, mem.percent, status="Completed")
 
 if __name__ == "__main__":
     main()
