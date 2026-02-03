@@ -1,0 +1,44 @@
+# DISABLED – not applied with CPU-only setup. Move to ../ to re-enable.
+# Pod 6: GPU inference (Triton)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-gpu
+  namespace: fraud-pipeline
+  labels:
+    app: inference-gpu
+    tier: inference
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: inference-gpu
+  template:
+    metadata:
+      labels:
+        app: inference-gpu
+        tier: inference
+    spec:
+      containers:
+        - name: inference-gpu
+          image: fraud-pipeline/inference-gpu:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+            - containerPort: 8001
+              name: grpc
+            - containerPort: 8002
+              name: metrics
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "2Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4000m"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"

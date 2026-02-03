@@ -1,0 +1,39 @@
+# Pod 2: CPU preprocessing
+# Image: CPU variant of feature engineering (e.g. pandas/sklearn); or same repo with tag -cpu
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: preprocessing-cpu
+  namespace: fraud-pipeline
+  labels:
+    app: preprocessing-cpu
+    tier: preprocessing
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: preprocessing-cpu
+  template:
+    metadata:
+      labels:
+        app: preprocessing-cpu
+        tier: preprocessing
+    spec:
+      containers:
+        - name: preprocessing-cpu
+          image: fraud-pipeline/preprocessing-cpu:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "redis"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"

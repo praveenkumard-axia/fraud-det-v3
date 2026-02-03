@@ -113,6 +113,16 @@ class ScalingConfig:
             "min_replicas": 1,
             "max_replicas": 20,
             "default_replicas": 2
+        },
+        "preprocessing-gpu": {
+            "min_replicas": 0,
+            "max_replicas": 4,
+            "default_replicas": 0
+        },
+        "inference-gpu": {
+            "min_replicas": 0,
+            "max_replicas": 8,
+            "default_replicas": 0
         }
     }
     

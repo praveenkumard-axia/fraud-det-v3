@@ -1,0 +1,41 @@
+# DISABLED – not applied with CPU-only setup. Move to ../ to re-enable.
+# Pod 4: GPU model training (XGBoost/RAPIDS)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-build
+  namespace: fraud-pipeline
+  labels:
+    app: model-build
+    tier: training
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-build
+  template:
+    metadata:
+      labels:
+        app: model-build
+        tier: training
+    spec:
+      containers:
+        - name: model-build
+          image: fraud-pipeline/model-build:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "redis"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "2Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4000m"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"

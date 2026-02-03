@@ -1,0 +1,39 @@
+# Pod 1: CPU generation (data-gather) - scale for txns/sec 1K–50K
+# Image: build from pods/data-gather/Dockerfile
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-gather
+  namespace: fraud-pipeline
+  labels:
+    app: data-gather
+    tier: generation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data-gather
+  template:
+    metadata:
+      labels:
+        app: data-gather
+        tier: generation
+    spec:
+      containers:
+        - name: data-gather
+          image: fraud-pipeline/data-gather:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "redis"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"

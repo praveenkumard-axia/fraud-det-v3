@@ -22,6 +22,7 @@ import uvicorn
 
 # Import queue and config modules
 from queue_interface import get_queue_service
+from k8s_scale import scale_pod
 from config_contract import (
     QueueTopics, StoragePaths, ScalingConfig, BacklogThresholds,
     SystemPriorities, GenerationRateLimits, get_env
@@ -96,7 +97,10 @@ class PipelineState:
         self.pod_counts = {
             "preprocessing": 1,
             "training": 1,
-            "inference": 2
+            "inference": 2,
+            "generation": 1,
+            "preprocessing_gpu": 0,
+            "inference_gpu": 0,
         }
         
         # Queue service
@@ -466,6 +470,9 @@ async def get_scale_config():
         "preprocessing_pods": state.pod_counts["preprocessing"],
         "training_pods": state.pod_counts["training"],
         "inference_pods": state.pod_counts["inference"],
+        "generation_pods": state.pod_counts["generation"],
+        "preprocessing_gpu_pods": state.pod_counts["preprocessing_gpu"],
+        "inference_gpu_pods": state.pod_counts["inference_gpu"],
         "generation_rate": state.generation_rate
     }
 
@@ -485,15 +492,15 @@ async def scale_preprocessing(request: ScaleRequest):
             "error": f"Replicas must be between {config['min_replicas']} and {config['max_replicas']}"
         }
     
+    ok, msg = scale_pod("preprocessing-cpu", replicas)
+    if not ok:
+        return {"success": False, "error": msg}
     state.pod_counts["preprocessing"] = replicas
-    
-    # DevOps will implement actual kubectl scaling
-    # For now, just update state
     return {
         "success": True,
-        "deployment": "preprocessing",
+        "deployment": "preprocessing-cpu",
         "replicas": replicas,
-        "message": f"Preprocessing scaled to {replicas} pods"
+        "message": msg
     }
 
 
@@ -509,13 +516,15 @@ async def scale_training(request: ScaleRequest):
             "error": f"Replicas must be between {config['min_replicas']} and {config['max_replicas']}"
         }
     
+    ok, msg = scale_pod("model-build", replicas)
+    if not ok:
+        return {"success": False, "error": msg}
     state.pod_counts["training"] = replicas
-    
     return {
         "success": True,
-        "deployment": "training",
+        "deployment": "model-build",
         "replicas": replicas,
-        "message": f"Training scaled to {replicas} pods"
+        "message": msg
     }
 
 
@@ -531,13 +540,81 @@ async def scale_inference(request: ScaleRequest):
             "error": f"Replicas must be between {config['min_replicas']} and {config['max_replicas']}"
         }
     
+    ok, msg = scale_pod("inference-cpu", replicas)
+    if not ok:
+        return {"success": False, "error": msg}
     state.pod_counts["inference"] = replicas
-    
     return {
         "success": True,
-        "deployment": "inference",
+        "deployment": "inference-cpu",
         "replicas": replicas,
-        "message": f"Inference scaled to {replicas} pods"
+        "message": msg
+    }
+
+
+@app.post("/api/control/scale/generation")
+async def scale_generation(request: ScaleRequest):
+    """Scale data-gather (generation) pods via kubectl in fraud-pipeline namespace"""
+    replicas = request.replicas
+    config = ScalingConfig.DEPLOYMENTS["data-gather"]
+    if replicas < config["min_replicas"] or replicas > config["max_replicas"]:
+        return {
+            "success": False,
+            "error": f"Replicas must be between {config['min_replicas']} and {config['max_replicas']}"
+        }
+    ok, msg = scale_pod("data-gather", replicas)
+    if not ok:
+        return {"success": False, "error": msg}
+    state.pod_counts["generation"] = replicas
+    return {
+        "success": True,
+        "deployment": "data-gather",
+        "replicas": replicas,
+        "message": msg
+    }
+
+
+@app.post("/api/control/scale/preprocessing-gpu")
+async def scale_preprocessing_gpu(request: ScaleRequest):
+    """Scale preprocessing (GPU) pods via kubectl in fraud-pipeline namespace"""
+    replicas = request.replicas
+    config = ScalingConfig.DEPLOYMENTS["preprocessing-gpu"]
+    if replicas < config["min_replicas"] or replicas > config["max_replicas"]:
+        return {
+            "success": False,
+            "error": f"Replicas must be between {config['min_replicas']} and {config['max_replicas']}"
+        }
+    ok, msg = scale_pod("preprocessing-gpu", replicas)
+    if not ok:
+        return {"success": False, "error": msg}
+    state.pod_counts["preprocessing_gpu"] = replicas
+    return {
+        "success": True,
+        "deployment": "preprocessing-gpu",
+        "replicas": replicas,
+        "message": msg
+    }
+
+
+@app.post("/api/control/scale/inference-gpu")
+async def scale_inference_gpu(request: ScaleRequest):
+    """Scale inference (GPU) pods via kubectl in fraud-pipeline namespace"""
+    replicas = request.replicas
+    config = ScalingConfig.DEPLOYMENTS["inference-gpu"]
+    if replicas < config["min_replicas"] or replicas > config["max_replicas"]:
+        return {
+            "success": False,
+            "error": f"Replicas must be between {config['min_replicas']} and {config['max_replicas']}"
+        }
+    ok, msg = scale_pod("inference-gpu", replicas)
+    if not ok:
+        return {"success": False, "error": msg}
+    state.pod_counts["inference_gpu"] = replicas
+    return {
+        "success": True,
+        "deployment": "inference-gpu",
+        "replicas": replicas,
+        "message": msg
     }
 
 

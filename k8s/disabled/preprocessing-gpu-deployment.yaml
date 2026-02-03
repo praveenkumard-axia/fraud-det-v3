@@ -1,0 +1,41 @@
+# DISABLED – not applied with CPU-only setup. Move to ../ to re-enable.
+# Pod 3: GPU preprocessing (RAPIDS)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: preprocessing-gpu
+  namespace: fraud-pipeline
+  labels:
+    app: preprocessing-gpu
+    tier: preprocessing
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: preprocessing-gpu
+  template:
+    metadata:
+      labels:
+        app: preprocessing-gpu
+        tier: preprocessing
+    spec:
+      containers:
+        - name: preprocessing-gpu
+          image: fraud-pipeline/preprocessing-gpu:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "redis"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "2Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4000m"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"
