@@ -195,19 +195,18 @@ class EnvironmentVariables:
     DevOps must set these in Kubernetes deployments
     """
     
-    # Queue configuration
-    QUEUE_TYPE = "QUEUE_TYPE"  # "inmemory", "kafka", "rabbitmq", "redis"
-    KAFKA_BOOTSTRAP_SERVERS = "KAFKA_BOOTSTRAP_SERVERS"
-    REDIS_URL = "REDIS_URL"
-    
-    # Storage configuration
+    # Storage configuration (FlashBlade-based queuing)
     FLASHBLADE_ENABLED = "FLASHBLADE_ENABLED"
     FLASHBLADE_PATH = "FLASHBLADE_PATH"
+    
+    # File-based queue configuration
+    POLL_INTERVAL_SECONDS = "POLL_INTERVAL_SECONDS"  # How often to check for new files
+    BATCH_FILE_SIZE = "BATCH_FILE_SIZE"  # Rows per file
+    MAX_FILES_PER_POLL = "MAX_FILES_PER_POLL"  # Max files to process per iteration
     
     # Pod-specific configuration
     GENERATION_RATE = "GENERATION_RATE"
     BATCH_SIZE = "BATCH_SIZE"
-    CONSUMER_GROUP = "CONSUMER_GROUP"
     
     # System configuration
     SYSTEM_PRIORITY = "SYSTEM_PRIORITY"
@@ -215,17 +214,42 @@ class EnvironmentVariables:
     
     # Defaults
     DEFAULTS = {
-        QUEUE_TYPE: "inmemory",
-        KAFKA_BOOTSTRAP_SERVERS: "localhost:9092",
-        REDIS_URL: "redis://localhost:6379/0",
         FLASHBLADE_ENABLED: "false",
         FLASHBLADE_PATH: "/mnt/flashblade",
+        POLL_INTERVAL_SECONDS: "1",  # Check for new files every 1 second
+        BATCH_FILE_SIZE: "10000",  # 10k rows per file (~3-5 MB)
+        MAX_FILES_PER_POLL: "50",  # Process up to 50 files per iteration
         GENERATION_RATE: str(GenerationRateLimits.DEFAULT_RATE),
         BATCH_SIZE: "50000",
-        CONSUMER_GROUP: "fraud-pipeline",
         SYSTEM_PRIORITY: SystemPriorities.BALANCED,
         ENABLE_METRICS: "true"
     }
+
+
+class FileQueuePaths:
+    """
+    Directory structure for file-based queuing on FlashBlade
+    """
+    
+    # Stage 1: Raw transactions (Generator -> Data Prep)
+    RAW_PENDING = "queue/raw-transactions/pending"
+    RAW_PROCESSING = "queue/raw-transactions/processing"
+    RAW_COMPLETED = "queue/raw-transactions/completed"
+    
+    # Stage 2: Features (Data Prep -> Inference)
+    FEATURES_PENDING = "queue/features-ready/pending"
+    FEATURES_PROCESSING = "queue/features-ready/processing"
+    FEATURES_COMPLETED = "queue/features-ready/completed"
+    
+    # Stage 3: Inference results
+    RESULTS_PENDING = "queue/inference-results/pending"
+    RESULTS_PROCESSING = "queue/inference-results/processing"
+    RESULTS_COMPLETED = "queue/inference-results/completed"
+    
+    # Training data
+    TRAINING_PENDING = "queue/training-queue/pending"
+    TRAINING_PROCESSING = "queue/training-queue/processing"
+    TRAINING_COMPLETED = "queue/training-queue/completed"
 
 
 # Helper function to get environment variable with default

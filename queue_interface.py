@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 """
-Queue Interface Abstraction
-Provides a unified interface for queue operations.
-DevOps can implement this with Kafka, RabbitMQ, Redis Streams, etc.
+FlashBlade File-Based Queue Interface
+Provides file-based queuing using FlashBlade storage with sequential naming and directory-based state tracking.
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional, Callable
-import threading
-import time
-from collections import deque
+from typing import List, Dict, Any, Optional
+from pathlib import Path
 import json
+import time
+import threading
+from datetime import datetime
 
 
 class QueueInterface(ABC):
@@ -18,72 +18,27 @@ class QueueInterface(ABC):
     
     @abstractmethod
     def publish(self, topic: str, message: Dict[str, Any]) -> bool:
-        """
-        Publish a message to a topic/queue
-        
-        Args:
-            topic: Topic/queue name
-            message: Message data as dictionary
-            
-        Returns:
-            True if successful, False otherwise
-        """
+        """Publish a message to a topic/queue"""
         pass
     
     @abstractmethod
     def publish_batch(self, topic: str, messages: List[Dict[str, Any]]) -> bool:
-        """
-        Publish multiple messages to a topic/queue
-        
-        Args:
-            topic: Topic/queue name
-            messages: List of message dictionaries
-            
-        Returns:
-            True if successful, False otherwise
-        """
+        """Publish multiple messages to a topic/queue"""
         pass
     
     @abstractmethod
     def consume(self, topic: str, timeout: float = 1.0) -> Optional[Dict[str, Any]]:
-        """
-        Consume a single message from a topic/queue
-        
-        Args:
-            topic: Topic/queue name
-            timeout: Timeout in seconds
-            
-        Returns:
-            Message dictionary or None if no message available
-        """
+        """Consume a single message from a topic/queue"""
         pass
     
     @abstractmethod
     def consume_batch(self, topic: str, batch_size: int = 100, timeout: float = 1.0) -> List[Dict[str, Any]]:
-        """
-        Consume multiple messages from a topic/queue
-        
-        Args:
-            topic: Topic/queue name
-            batch_size: Maximum number of messages to consume
-            timeout: Timeout in seconds
-            
-        Returns:
-            List of message dictionaries (may be empty)
-        """
+        """Consume multiple messages from a topic/queue"""
         pass
     
     @abstractmethod
     def get_backlog(self, topic: str) -> int:
-        """
-        Get the current backlog/depth of a queue
-        
-        Args:
-            topic: Topic/queue name
-            
-        Returns:
-            Number of messages waiting in queue
-        """
+        """Get the current backlog/depth of a queue"""
         pass
     
     @abstractmethod
@@ -98,7 +53,7 @@ class QueueInterface(ABC):
 
     @abstractmethod
     def get_metrics(self, prefix: str = "") -> Dict[str, int]:
-        """Get all metrics with a given prefix"""
+        """Get all metrics with given prefix"""
         pass
 
     @abstractmethod
@@ -107,271 +62,221 @@ class QueueInterface(ABC):
         pass
 
 
-class InMemoryQueue(QueueInterface):
+class FlashBladeQueue(QueueInterface):
     """
-    In-memory queue implementation for development/testing
-    This is what YOU (backend dev) will use for local testing
-    DevOps will replace this with KafkaQueue in production
+    File-based queue implementation using FlashBlade storage.
+    Uses sequential file naming and directory-based state tracking.
     """
     
-    def __init__(self):
-        self.queues: Dict[str, deque] = {}
-        self.locks: Dict[str, threading.Lock] = {}
+    def __init__(self, base_path: str = "/mnt/flashblade"):
+        self.base_path = Path(base_path)
+        self.counters = {}  # Topic -> file counter
+        self.counter_lock = threading.Lock()
+        self.metrics = {}  # Global metrics
+        self.metrics_lock = threading.Lock()
+        
+        # Create base directory structure
+        self._init_directories()
+        
+        # Load existing counters
+        self._load_counters()
     
-    def _get_queue(self, topic: str) -> deque:
-        """Get or create a queue for a topic"""
-        if topic not in self.queues:
-            self.queues[topic] = deque()
-            self.locks[topic] = threading.Lock()
-        return self.queues[topic]
+    def _init_directories(self):
+        """Initialize directory structure for all topics"""
+        from config_contract import FileQueuePaths
+        
+        # Get all queue paths from config
+        queue_paths = [
+            FileQueuePaths.RAW_PENDING, FileQueuePaths.RAW_PROCESSING, FileQueuePaths.RAW_COMPLETED,
+            FileQueuePaths.FEATURES_PENDING, FileQueuePaths.FEATURES_PROCESSING, FileQueuePaths.FEATURES_COMPLETED,
+            FileQueuePaths.RESULTS_PENDING, FileQueuePaths.RESULTS_PROCESSING, FileQueuePaths.RESULTS_COMPLETED,
+            FileQueuePaths.TRAINING_PENDING, FileQueuePaths.TRAINING_PROCESSING, FileQueuePaths.TRAINING_COMPLETED
+        ]
+        
+        for path in queue_paths:
+            (self.base_path / path).mkdir(parents=True, exist_ok=True)
     
-    def _get_lock(self, topic: str) -> threading.Lock:
-        """Get lock for a topic"""
-        if topic not in self.locks:
-            self.locks[topic] = threading.Lock()
-        return self.locks[topic]
+    def _get_topic_paths(self, topic: str) -> Dict[str, Path]:
+        """Get pending/processing/completed paths for a topic"""
+        from config_contract import FileQueuePaths
+        
+        # Map topic names to directory paths
+        topic_map = {
+            "raw-transactions": (FileQueuePaths.RAW_PENDING, FileQueuePaths.RAW_PROCESSING, FileQueuePaths.RAW_COMPLETED),
+            "features-ready": (FileQueuePaths.FEATURES_PENDING, FileQueuePaths.FEATURES_PROCESSING, FileQueuePaths.FEATURES_COMPLETED),
+            "inference-results": (FileQueuePaths.RESULTS_PENDING, FileQueuePaths.RESULTS_PROCESSING, FileQueuePaths.RESULTS_COMPLETED),
+            "training-queue": (FileQueuePaths.TRAINING_PENDING, FileQueuePaths.TRAINING_PROCESSING, FileQueuePaths.TRAINING_COMPLETED)
+        }
+        
+        pending, processing, completed = topic_map.get(topic, (f"queue/{topic}/pending", f"queue/{topic}/processing", f"queue/{topic}/completed"))
+        
+        return {
+            "pending": self.base_path / pending,
+            "processing": self.base_path / processing,
+            "completed": self.base_path / completed
+        }
+    
+    def _load_counters(self):
+        """Load existing file counters from disk"""
+        counter_file = self.base_path / "queue" / ".counters.json"
+        if counter_file.exists():
+            try:
+                with open(counter_file, 'r') as f:
+                    self.counters = json.load(f)
+            except:
+                self.counters = {}
+    
+    def _save_counters(self):
+        """Save file counters to disk"""
+        counter_file = self.base_path / "queue" / ".counters.json"
+        counter_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(counter_file, 'w') as f:
+            json.dump(self.counters, f)
+    
+    def _get_next_filename(self, topic: str) -> str:
+        """Get next sequential filename for topic"""
+        with self.counter_lock:
+            if topic not in self.counters:
+                self.counters[topic] = 0
+            self.counters[topic] += 1
+            counter = self.counters[topic]
+            self._save_counters()
+            return f"batch_{counter:09d}.parquet"
     
     def publish(self, topic: str, message: Dict[str, Any]) -> bool:
-        """Publish a single message"""
+        """Publish a single message (writes as JSON file)"""
+        return self.publish_batch(topic, [message])
+    
+    def publish_batch(self, topic: str, messages: List[Dict[str, Any]]) -> bool:
+        """Publish batch of messages as a Parquet file"""
+        if not messages:
+            return True
+        
         try:
-            queue = self._get_queue(topic)
-            lock = self._get_lock(topic)
+            import polars as pl
             
-            with lock:
-                # Serialize to JSON and back to ensure data is serializable
-                serialized = json.dumps(message)
-                deserialized = json.loads(serialized)
-                queue.append(deserialized)
+            # Convert messages to DataFrame
+            df = pl.DataFrame(messages)
+            
+            # Get next filename
+            filename = self._get_next_filename(topic)
+            paths = self._get_topic_paths(topic)
+            file_path = paths["pending"] / filename
+            
+            # Write Parquet file
+            df.write_parquet(file_path)
             
             return True
         except Exception as e:
             print(f"Error publishing to {topic}: {e}")
             return False
     
-    def publish_batch(self, topic: str, messages: List[Dict[str, Any]]) -> bool:
-        """Publish multiple messages"""
-        try:
-            queue = self._get_queue(topic)
-            lock = self._get_lock(topic)
-            
-            with lock:
-                for message in messages:
-                    serialized = json.dumps(message)
-                    deserialized = json.loads(serialized)
-                    queue.append(deserialized)
-            
-            return True
-        except Exception as e:
-            print(f"Error publishing batch to {topic}: {e}")
-            return False
-    
     def consume(self, topic: str, timeout: float = 1.0) -> Optional[Dict[str, Any]]:
         """Consume a single message"""
-        queue = self._get_queue(topic)
-        lock = self._get_lock(topic)
-        
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            with lock:
-                if queue:
-                    return queue.popleft()
-            
-            # Small sleep to avoid busy waiting
-            time.sleep(0.01)
-        
-        return None
+        batch = self.consume_batch(topic, batch_size=1, timeout=timeout)
+        return batch[0] if batch else None
     
     def consume_batch(self, topic: str, batch_size: int = 100, timeout: float = 1.0) -> List[Dict[str, Any]]:
-        """Consume multiple messages"""
-        queue = self._get_queue(topic)
-        lock = self._get_lock(topic)
+        """Consume batch of messages by reading Parquet files"""
+        import polars as pl
         
+        paths = self._get_topic_paths(topic)
+        pending_dir = paths["pending"]
+        processing_dir = paths["processing"]
+        completed_dir = paths["completed"]
+        
+        # Get pending files (sorted alphabetically = sequential order)
+        pending_files = sorted(pending_dir.glob("batch_*.parquet"))
+        
+        if not pending_files:
+            time.sleep(timeout)
+            return []
+        
+        # Process up to batch_size files
         messages = []
-        start_time = time.time()
+        files_processed = 0
         
-        while len(messages) < batch_size and time.time() - start_time < timeout:
-            with lock:
-                while queue and len(messages) < batch_size:
-                    messages.append(queue.popleft())
-            
-            # If we got some messages, return them
-            if messages:
-                break
-            
-            # Small sleep to avoid busy waiting
-            time.sleep(0.01)
+        for file_path in pending_files[:batch_size]:
+            try:
+                # Move to processing (atomic operation)
+                processing_path = processing_dir / file_path.name
+                file_path.rename(processing_path)
+                
+                # Read Parquet file
+                df = pl.read_parquet(processing_path)
+                
+                # Convert to list of dicts
+                batch_messages = df.to_dicts()
+                messages.extend(batch_messages)
+                
+                # Move to completed
+                completed_path = completed_dir / file_path.name
+                processing_path.rename(completed_path)
+                
+                files_processed += 1
+                
+            except Exception as e:
+                print(f"Error consuming from {topic}: {e}")
+                # Try to move file back to pending if it's still in processing
+                if processing_path.exists():
+                    try:
+                        processing_path.rename(file_path)
+                    except:
+                        pass
         
         return messages
     
     def get_backlog(self, topic: str) -> int:
-        """Get current queue depth"""
-        queue = self._get_queue(topic)
-        lock = self._get_lock(topic)
-        
-        with lock:
-            return len(queue)
+        """Get backlog as count of pending files"""
+        paths = self._get_topic_paths(topic)
+        pending_files = list(paths["pending"].glob("batch_*.parquet"))
+        return len(pending_files)
     
     def clear(self, topic: str) -> bool:
-        """Clear all messages from queue"""
+        """Clear all files from pending/processing/completed directories"""
         try:
-            queue = self._get_queue(topic)
-            lock = self._get_lock(topic)
+            paths = self._get_topic_paths(topic)
             
-            with lock:
-                queue.clear()
+            for dir_type in ["pending", "processing", "completed"]:
+                for file in paths[dir_type].glob("batch_*.parquet"):
+                    file.unlink()
             
             return True
         except Exception as e:
             print(f"Error clearing {topic}: {e}")
             return False
-
-    def __init__(self):
-        self.queues: Dict[str, deque] = {}
-        self.locks: Dict[str, threading.Lock] = {}
-        self.metrics: Dict[str, int] = {}
-        self.metrics_lock = threading.Lock()
-
+    
     def increment_metric(self, name: str, amount: int = 1) -> bool:
+        """Atomically increment a global metric"""
         with self.metrics_lock:
             self.metrics[name] = self.metrics.get(name, 0) + amount
         return True
-
+    
     def get_metrics(self, prefix: str = "") -> Dict[str, int]:
+        """Get all metrics with given prefix"""
         with self.metrics_lock:
             return {k: v for k, v in self.metrics.items() if k.startswith(prefix)}
-
+    
     def clear_metrics(self) -> bool:
+        """Clear all global metrics"""
         with self.metrics_lock:
             self.metrics.clear()
         return True
 
 
-class RedisQueue(QueueInterface):
-    """
-    Redis implementation of the queue interface.
-    Enables communication between different processes.
-    """
-    
-    def __init__(self, redis_url: str):
-        try:
-            import redis
-            self.redis = redis.from_url(redis_url)
-            self.redis.ping()
-        except ImportError:
-            print("Error: 'redis' package not installed. Run 'pip install redis'")
-            raise
-        except Exception as e:
-            print(f"Error connecting to Redis: {e}")
-            raise
-            
-    def publish(self, topic: str, message: Dict[str, Any]) -> bool:
-        try:
-            self.redis.rpush(topic, json.dumps(message))
-            return True
-        except Exception as e:
-            print(f"Error publishing to Redis {topic}: {e}")
-            return False
-            
-    def publish_batch(self, topic: str, messages: List[Dict[str, Any]]) -> bool:
-        try:
-            if not messages:
-                return True
-            serialized_messages = [json.dumps(m) for m in messages]
-            self.redis.rpush(topic, *serialized_messages)
-            return True
-        except Exception as e:
-            print(f"Error publishing batch to Redis {topic}: {e}")
-            return False
-            
-    def consume(self, topic: str, timeout: float = 1.0) -> Optional[Dict[str, Any]]:
-        try:
-            # blpop returns (topic, message)
-            result = self.redis.blpop(topic, timeout=max(1, int(timeout)))
-            if result:
-                return json.loads(result[1])
-            return None
-        except Exception as e:
-            print(f"Error consuming from Redis {topic}: {e}")
-            return None
-            
-    def consume_batch(self, topic: str, batch_size: int = 100, timeout: float = 1.0) -> List[Dict[str, Any]]:
-        messages = []
-        # First try to get one message with timeout
-        msg = self.consume(topic, timeout)
-        if msg:
-            messages.append(msg)
-            # Then try to get more messages quickly without blocking
-            while len(messages) < batch_size:
-                # lpop returns a single message or None
-                result = self.redis.lpop(topic)
-                if result:
-                    messages.append(json.loads(result))
-                else:
-                    break
-        return messages
-        
-    def get_backlog(self, topic: str) -> int:
-        try:
-            return self.redis.llen(topic)
-        except Exception as e:
-            print(f"Error getting backlog from Redis {topic}: {e}")
-            return 0
-            
-    def clear(self, topic: str) -> bool:
-        try:
-            self.redis.delete(topic)
-            return True
-        except Exception as e:
-            print(f"Error clearing Redis {topic}: {e}")
-            return False
-
-    def increment_metric(self, name: str, amount: int = 1) -> bool:
-        try:
-            self.redis.hincrby("global_metrics", name, amount)
-            return True
-        except Exception as e:
-            print(f"Error incrementing Redis metric {name}: {e}")
-            return False
-
-    def get_metrics(self, prefix: str = "") -> Dict[str, int]:
-        try:
-            raw_metrics = self.redis.hgetall("global_metrics")
-            metrics = {}
-            for k, v in raw_metrics.items():
-                name = k.decode('utf-8')
-                if name.startswith(prefix):
-                    metrics[name] = int(v)
-            return metrics
-        except Exception as e:
-            print(f"Error getting Redis metrics: {e}")
-            return {}
-
-    def clear_metrics(self) -> bool:
-        try:
-            self.redis.delete("global_metrics")
-            return True
-        except Exception as e:
-            print(f"Error clearing Redis metrics: {e}")
-            return False
-
-
-# Global queue service instance cache
-_queue_service_instance = None
-
-
 def get_queue_service() -> QueueInterface:
-    """Get the configured queue service (singleton pattern)"""
-    global _queue_service_instance
+    """Factory function to get queue service instance"""
+    from config_contract import StoragePaths, get_env, EnvironmentVariables
     
-    if _queue_service_instance is None:
-        from config_contract import get_env, EnvironmentVariables
-        queue_type = get_env(EnvironmentVariables.QUEUE_TYPE, "inmemory").lower()
-        
-        if queue_type == "redis":
-            redis_url = get_env(EnvironmentVariables.REDIS_URL, "redis://localhost:6379/0")
-            _queue_service_instance = RedisQueue(redis_url)
-        else:
-            # Fallback to in-memory for local testing/dev
-            _queue_service_instance = InMemoryQueue()
-            
-    return _queue_service_instance
+    # Always use FlashBlade queue (with local fallback)
+    flashblade_path = get_env(EnvironmentVariables.FLASHBLADE_PATH, "/mnt/flashblade")
+    
+    # If FlashBlade not mounted, use local path
+    if not Path(flashblade_path).exists():
+        from pathlib import Path as P
+        local_base = P(__file__).parent / "run_queue_data"
+        local_base.mkdir(parents=True, exist_ok=True)
+        flashblade_path = str(local_base)
+        print(f"FlashBlade not mounted, using local queue: {flashblade_path}")
+    
+    return FlashBladeQueue(base_path=flashblade_path)

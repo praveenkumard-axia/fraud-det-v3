@@ -13,9 +13,8 @@ import threading
 from pathlib import Path
 from datetime import datetime
 
-# Set environment variables for all pods and the orchestrator
-os.environ["QUEUE_TYPE"] = "redis"
-os.environ["REDIS_URL"] = "redis://localhost:6379/0"
+# Set environment variables for all pods
+os.environ["CONTINUOUS_MODE"] = "true"
 
 # Import config/contracts
 BASE_DIR = Path(__file__).parent
@@ -25,7 +24,7 @@ from queue_interface import get_queue_service
 
 # Configuration
 PYTHON_EXE = "/home/anuj/Axia/myenv/bin/python"  # Use the virtual environment
-THRESHOLD_TO_START = 100_000  # Records needed before starting downstream (Lowered for fast demo)
+THRESHOLD_TO_START = 10  # Files needed before starting downstream (Lowered for fast testing)
 CHECK_INTERVAL = 2              # Seconds between backlog checks
 
 class ProcessManager:
@@ -102,11 +101,11 @@ class ProcessManager:
 def main():
     manager = ProcessManager()
     
-    # Initialize queue service
+    # Initialize queue service (FlashBlade-based)
     queue = get_queue_service()
     
     # Clear existing queues for a fresh start
-    print(">>> Clearing Redis queues and metrics...")
+    print(">>> Clearing FlashBlade queues and metrics...")
     queue.clear(QueueTopics.RAW_TRANSACTIONS)
     queue.clear(QueueTopics.FEATURES_READY)
     queue.clear(QueueTopics.INFERENCE_RESULTS)
@@ -122,10 +121,10 @@ def main():
     signal.signal(signal.SIGTERM, handle_signal)
 
     print("="*80)
-    print("  SPEARHEAD CONTINUOUS FRAUD DETECTION PIPELINE (REDIS EDITION)")
+    print("  SPEARHEAD CONTINUOUS FRAUD DETECTION PIPELINE (FLASHBLADE EDITION)")
     print("="*80)
-    print(f"Goal: Start Generator, wait for {THRESHOLD_TO_START:,} records in REDIS, then trigger pipeline.")
-    print("Status: DECOUPLED | NON-BLOCKING | REDIS QUEUES")
+    print(f"Goal: Start Generator, wait for {THRESHOLD_TO_START:,} files in FlashBlade, then trigger pipeline.")
+    print("Status: DECOUPLED | NON-BLOCKING | FILE-BASED QUEUES")
     print("="*80)
 
     # 1. Start the Data Generator immediately
@@ -137,20 +136,20 @@ def main():
 
     try:
         while not manager.stop_event.is_set():
-            # Monitor Redis backlog
-            total_records = queue.get_backlog(QueueTopics.RAW_TRANSACTIONS)
+            # Monitor FlashBlade backlog (file count)
+            total_files = queue.get_backlog(QueueTopics.RAW_TRANSACTIONS)
             
             elapsed = time.time() - start_time
             
             # Print heart-beat status
             if not downstream_started:
-                progress = (total_records / THRESHOLD_TO_START) * 100
-                print(f"[MONITOR] Redis Backlog: {total_records:,} / {THRESHOLD_TO_START:,} records ({progress:.1f}%) | Elapsed: {elapsed:.1f}s", flush=True)
+                progress = (total_files / THRESHOLD_TO_START) * 100
+                print(f"[MONITOR] FlashBlade Backlog: {total_files:,} / {THRESHOLD_TO_START:,} files ({progress:.1f}%) | Elapsed: {elapsed:.1f}s", flush=True)
 
             # Check if we hit the threshold to start downstream
-            if not downstream_started and total_records >= THRESHOLD_TO_START:
+            if not downstream_started and total_files >= THRESHOLD_TO_START:
                 print(f"\n{'*'*80}")
-                print(f"*** MILESTONE REACHED: {total_records:,} RECORDS IN REDIS")
+                print(f"*** MILESTONE REACHED: {total_files:,} FILES IN FLASHBLADE")
                 print(f"*** TRIGGERING DOWNSTREAM STAGES...")
                 print(f"{'*'*80}\n")
                 
