@@ -26,6 +26,6 @@ EXPOSE 8000 8001 8002
 
 # Start Triton Inference Server
 CMD ["tritonserver", \
-     "--model-repository=${MODEL_REPOSITORY}", \
-     "--strict-model-config=false", \
-     "--log-verbose=1"]
+    "--model-repository=${MODEL_REPOSITORY}", \
+    "--strict-model-config=false", \
+    "--log-verbose=1"]

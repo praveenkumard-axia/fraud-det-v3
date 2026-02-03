@@ -43,9 +43,33 @@ kubectl delete deployment -n fraud-pipeline model-build preprocessing-gpu infere
 
 So without FlashBlade, everything works; data is written inside the container. For production you can mount a PVC or NFS at `/mnt/flashblade` if you want shared storage.
 
-## Images
+## Fix ImagePullBackOff (local cluster)
 
-Replace `fraud-pipeline/<name>:latest` with your registry and tags (e.g. build from `pods/data-gather/`, `pods/data-prep/` for preprocessing-cpu, `pods/inference/` for inference-cpu).
+Deployments use `imagePullPolicy: Never`, so the cluster will **not** pull from a registry; images must exist on the node.
+
+**1. Build images** (from repo root):
+
+```bash
+chmod +x k8s/build-images.sh
+./k8s/build-images.sh
+```
+
+**2. Load into cluster**
+
+- **Kind:**  
+  `kind load docker-image fraud-pipeline/data-gather:latest fraud-pipeline/preprocessing-cpu:latest fraud-pipeline/inference-cpu:latest`
+
+- **Minikube:** run `eval $(minikube docker-env)`, then run `./k8s/build-images.sh` again so images are built in minikube’s Docker.
+
+- **Docker Desktop Kubernetes:** uses the host Docker daemon; after building with `./k8s/build-images.sh`, no load step is needed.
+
+**3. Restart deployments** so they pick up the images:
+
+```bash
+kubectl rollout restart deployment -n fraud-pipeline data-gather preprocessing-cpu inference-cpu
+```
+
+**Using a real registry:** push the images to your registry, set `image` in the YAML to your image URL, and set `imagePullPolicy: IfNotPresent` (or remove it).
 
 ## GPU deployments (disabled)
 

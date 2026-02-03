@@ -22,7 +22,7 @@ spec:
       containers:
         - name: data-gather
           image: fraud-pipeline/data-gather:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
               value: "true"

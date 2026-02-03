@@ -22,7 +22,7 @@ spec:
       containers:
         - name: preprocessing-cpu
           image: fraud-pipeline/preprocessing-cpu:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
               value: "true"

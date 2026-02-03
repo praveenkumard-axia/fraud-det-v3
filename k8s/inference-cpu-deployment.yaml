@@ -22,7 +22,7 @@ spec:
       containers:
         - name: inference-cpu
           image: fraud-pipeline/inference-cpu:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
               value: "true"

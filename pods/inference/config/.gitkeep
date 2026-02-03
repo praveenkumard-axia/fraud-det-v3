@@ -1,0 +1,2 @@
+# Placeholder so Dockerfile COPY config/ succeeds.
+# Add Triton/model config files here when using the full inference image.

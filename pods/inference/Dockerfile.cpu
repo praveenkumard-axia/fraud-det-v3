@@ -1,0 +1,19 @@
+# CPU-only inference: runs client.py with XGBoost CPU fallback (no Triton/GPU).
+# Build from repo root: docker build -t fraud-pipeline/inference-cpu:latest -f pods/inference/Dockerfile.cpu .
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir \
+    xgboost>=2.0.0 \
+    numpy>=1.24.0 \
+    psutil \
+    "tritonclient[all]>=2.34.0"
+
+COPY queue_interface.py config_contract.py ./
+COPY pods/inference/client.py ./
+
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python", "client.py"]

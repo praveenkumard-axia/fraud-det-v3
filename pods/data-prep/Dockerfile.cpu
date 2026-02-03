@@ -1,0 +1,20 @@
+# CPU data-prep built from repo root so queue_interface + config_contract are in the image.
+# Build: docker build -t fraud-pipeline/preprocessing-cpu:latest -f pods/data-prep/Dockerfile.cpu .
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir \
+    polars \
+    numpy>=1.24.0 \
+    psutil
+
+COPY queue_interface.py config_contract.py ./
+COPY pods/data-prep/prepare.py ./
+
+ENV PYTHONPATH=/app
+ENV INPUT_DIR=/data/input
+ENV OUTPUT_DIR=/data/output
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python", "prepare.py"]
