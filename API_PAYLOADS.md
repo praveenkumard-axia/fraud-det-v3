@@ -788,6 +788,244 @@ curl -i -N \
 
 ---
 
+## 📋 **API 11: Business Intelligence Metrics**
+
+### **Endpoint**
+```
+GET /api/business/metrics
+```
+
+### **Request**
+No payload required (GET request)
+
+### **Success Response (200 OK)**
+```json
+{
+  "fraud_exposure_identified": 247892.50,
+  "fraud_rate": 0.0058,
+  "alerts_per_million": 1946,
+  "high_risk_txn_rate": 0.0019,
+  "projected_annual_savings": 128000000,
+  
+  "risk_score_distribution": [
+    { "bin": "0-5", "count": 450000, "percentage": 6.8, "score": 80 },
+    { "bin": "5-10", "count": 420000, "percentage": 6.4, "score": 75 },
+    { "bin": "10-15", "count": 380000, "percentage": 5.8, "score": 70 }
+  ],
+  
+  "fraud_velocity": [
+    { "timestamp": "2026-02-04T13:21:00Z", "time": "-30m", "count": 45, "score": 99 },
+    { "timestamp": "2026-02-04T13:22:00Z", "time": "-29m", "count": 42, "score": 95 },
+    { "timestamp": "2026-02-04T13:23:00Z", "time": "-28m", "count": 50, "score": 98 }
+  ],
+  
+  "risk_signals_by_category": [
+    { "category": "shopping_net", "amount": 68240.50, "count": 842, "score": 87 },
+    { "category": "grocery_pos", "amount": 48120.75, "count": 612, "score": 82 },
+    { "category": "misc_net", "amount": 37450.20, "count": 489, "score": 79 }
+  ],
+  
+  "recent_risk_signals": [
+    {
+      "risk_score": 97.8,
+      "merchant": "fraud_Kiehn LLC",
+      "category": "shopping_net",
+      "cc_num_masked": "***4095",
+      "state": "TX",
+      "cardholder": "Jennifer B.",
+      "amount": 1842.30,
+      "timestamp": "2026-02-04T13:51:38Z",
+      "seconds_ago": 2
+    },
+    {
+      "risk_score": 95.2,
+      "merchant": "fraud_Rippin, Kub and Mann",
+      "category": "misc_net",
+      "cc_num_masked": "***2095",
+      "state": "CA",
+      "cardholder": "Edward S.",
+      "amount": 946.77,
+      "timestamp": "2026-02-04T13:51:32Z",
+      "seconds_ago": 8
+    }
+  ],
+  
+  "ml_details": {
+    "precision": 0.942,
+    "recall": 0.897,
+    "accuracy": 0.989,
+    "threshold": 11,
+    "decision_latency_ms": 12.4
+  },
+  
+  "risk_concentration": {
+    "top_1_percent_txns": 12847,
+    "top_1_percent_fraud_amount": 168567.80,
+    "total_fraud_amount": 247892.50,
+    "concentration_percentage": 68.0,
+    "pattern_alert": "shopping_net + misc_net (44%)"
+  },
+  
+  "state_risk": [
+    { "rank": 1, "state": "TX", "fraud_amount": 38420.50, "count": 487 },
+    { "rank": 2, "state": "CA", "fraud_amount": 34190.25, "count": 432 },
+    { "rank": 3, "state": "NY", "fraud_amount": 28770.80, "count": 365 }
+  ],
+  
+  "metadata": {
+    "total_transactions": 6600000,
+    "high_risk_count": 12847,
+    "threshold": 75,
+    "elapsed_hours": 2.0,
+    "timestamp": "2026-02-04T13:51:40Z"
+  }
+}
+```
+
+### **Field Descriptions**
+
+**Top-Level Metrics:**
+- `fraud_exposure_identified` (float): Total $ amount flagged as fraud (risk_score ≥ 11)
+  - Formula: `SUM(amt) WHERE risk_score ≥ 11`
+- `fraud_rate` (float): Percentage of total amount flagged as fraud
+  - Formula: `SUM(amt flagged) / SUM(amt total)`
+- `alerts_per_million` (integer): Number of alerts per 1M transactions
+  - Formula: `(flagged / total) × 1,000,000`
+- `high_risk_txn_rate` (float): Percentage of transactions flagged as high-risk
+  - Formula: `COUNT(flagged) / COUNT(total)`
+- `projected_annual_savings` (float): Estimated annual fraud prevention savings
+  - Formula: `(fraud_exposure / hours_elapsed) × 8,760`
+
+**risk_score_distribution:**
+- Array of 20 bins (0-5, 5-10, ..., 95-100)
+- `bin` (string): Score range
+- `count` (integer): Number of transactions in this bin
+- `percentage` (float): Percentage of total transactions
+- `score` (integer): Visualization height (0-100)
+
+**fraud_velocity:**
+- Array of 30 data points (last 30 minutes)
+- `timestamp` (string): ISO 8601 timestamp
+- `time` (string): Relative time label (e.g., "-30m", "-29m")
+- `count` (integer): Number of high-risk transactions in this minute
+- `score` (integer): Visualization height (0-100)
+
+**risk_signals_by_category:**
+- Array of transaction categories sorted by fraud amount
+- `category` (string): Transaction category name
+- `amount` (float): Total fraud amount for this category
+- `count` (integer): Number of fraudulent transactions
+- `score` (integer): Average risk score for visualization
+
+**recent_risk_signals:**
+- Array of most recent high-risk transactions (last 60 seconds, limit 10)
+- `risk_score` (float): Model risk score (0-100)
+- `merchant` (string): Merchant name
+- `category` (string): Transaction category
+- `cc_num_masked` (string): Masked credit card number
+- `state` (string): US state code
+- `cardholder` (string): Cardholder name (first name + last initial)
+- `amount` (float): Transaction amount
+- `timestamp` (string): ISO 8601 timestamp
+- `seconds_ago` (integer): Seconds since transaction
+
+**ml_details:**
+- `precision` (float): TP / (TP + FP)
+- `recall` (float): TP / (TP + FN)
+- `accuracy` (float): (TP + TN) / (TP + TN + FP + FN)
+- `threshold` (integer): Decision threshold (default: 11)
+- `decision_latency_ms` (float): Average decision latency in milliseconds
+
+**risk_concentration:**
+- `top_1_percent_txns` (integer): Number of transactions in top 1%
+- `top_1_percent_fraud_amount` (float): Fraud amount from top 1%
+- `total_fraud_amount` (float): Total fraud amount
+- `concentration_percentage` (float): Percentage of fraud from top 1%
+- `pattern_alert` (string): Detected fraud pattern
+
+**state_risk:**
+- Array of top 8 states by fraud amount
+- `rank` (integer): State ranking (1-8)
+- `state` (string): US state code
+- `fraud_amount` (float): Total fraud amount for this state
+- `count` (integer): Number of fraudulent transactions
+
+**metadata:**
+- `total_transactions` (integer): Total transactions processed
+- `high_risk_count` (integer): Number of high-risk transactions
+- `threshold` (integer): Risk score threshold
+- `elapsed_hours` (float): Hours since pipeline started
+- `timestamp` (string): ISO 8601 timestamp of response
+
+### **KPI Calculation Formulas**
+
+| # | KPI | Formula | Fields Used |
+|---|-----|---------|-------------|
+| 1 | Fraud Exposure Identified | `SUM(amt) WHERE risk_score ≥ 11` | amt, model output |
+| 2 | Transactions Analyzed | `COUNT(*)` | all rows |
+| 3 | High-Risk Flagged | `COUNT(*) WHERE risk_score ≥ 11` | model output |
+| 4 | Decision Latency | `AVG(t_output − t_input)` | pipeline timestamps |
+| 5 | Precision @ Threshold | `TP / (TP + FP)` | is_fraud, model output |
+| 6 | Fraud Rate | `SUM(amt flagged) / SUM(amt total)` | amt, model output |
+| 7 | Alerts per 1M | `(flagged / total) × 1,000,000` | model output |
+| 8 | High-Risk Txn Rate | `COUNT(flagged) / COUNT(total)` | model output |
+| 9 | Annual Savings | `(fraud_exposure / hours_elapsed) × 8,760` | amt, time |
+| 10 | Risk Distribution | `GROUP BY risk_score bins` | model output |
+| 11 | Fraud Velocity | `COUNT(flagged) GROUP BY minute` | model output, time |
+| 12 | Category Risk | `SUM(amt flagged) GROUP BY category` | category, amt |
+| 13 | Risk Concentration | `SUM(amt top 1%) / SUM(amt flagged)` | amt, model output |
+| 14 | State Risk | `SUM(amt flagged) GROUP BY state` | state, amt |
+| 15 | Recall | `TP / (TP + FN)` | is_fraud, model output |
+| 16 | False Positive Rate | `FP / (FP + TN)` | is_fraud, model output |
+
+### **cURL Examples**
+```bash
+# Get all business metrics
+curl http://localhost:8000/api/business/metrics
+
+# Get specific metric with jq
+curl -s http://localhost:8000/api/business/metrics | jq '.fraud_exposure_identified'
+
+# Get ML details
+curl -s http://localhost:8000/api/business/metrics | jq '.ml_details'
+
+# Get recent alerts
+curl -s http://localhost:8000/api/business/metrics | jq '.recent_risk_signals'
+
+# Monitor continuously
+watch -n 5 'curl -s http://localhost:8000/api/business/metrics | jq .'
+```
+
+### **JavaScript Example**
+```javascript
+// Fetch business metrics
+async function fetchBusinessMetrics() {
+  const response = await fetch('/api/business/metrics');
+  const data = await response.json();
+  
+  // Update dashboard
+  document.getElementById('fraud-exposure').textContent = 
+    '$' + formatNumber(data.fraud_exposure_identified);
+  
+  document.getElementById('fraud-rate').textContent = 
+    (data.fraud_rate * 100).toFixed(2) + '%';
+  
+  document.getElementById('precision').textContent = 
+    (data.ml_details.precision * 100).toFixed(1) + '%';
+  
+  // Update charts
+  updateRiskDistribution(data.risk_score_distribution);
+  updateFraudVelocity(data.fraud_velocity);
+  updateCategoryRisk(data.risk_signals_by_category);
+  updateRecentAlerts(data.recent_risk_signals);
+}
+
+// Poll every 5 seconds
+setInterval(fetchBusinessMetrics, 5000);
+```
+
+---
+
 ## 📊 **Quick Reference Table**
 
 | API | Method | Payload Required | Response Type |

@@ -52,7 +52,17 @@ class QueueInterface(ABC):
         pass
 
     @abstractmethod
-    def get_metrics(self, prefix: str = "") -> Dict[str, int]:
+    def set_metric(self, name: str, value: Any) -> bool:
+        """Set a global metric to a specific value"""
+        pass
+
+    @abstractmethod
+    def get_metric(self, name: str) -> Any:
+        """Get the value of a specific metric"""
+        pass
+
+    @abstractmethod
+    def get_metrics(self, prefix: str = "") -> Dict[str, Any]:
         """Get all metrics with given prefix"""
         pass
 
@@ -78,8 +88,9 @@ class FlashBladeQueue(QueueInterface):
         # Create base directory structure
         self._init_directories()
         
-        # Load existing counters
+        # Load existing counters and metrics
         self._load_counters()
+        self._load_metrics()
     
     def _init_directories(self):
         """Initialize directory structure for all topics"""
@@ -126,6 +137,23 @@ class FlashBladeQueue(QueueInterface):
             except:
                 self.counters = {}
     
+    def _load_metrics(self):
+        """Load global metrics from disk"""
+        metrics_file = self.base_path / "queue" / ".metrics.json"
+        if metrics_file.exists():
+            try:
+                with open(metrics_file, 'r') as f:
+                    self.metrics = json.load(f)
+            except:
+                self.metrics = {}
+
+    def _save_metrics(self):
+        """Save global metrics to disk"""
+        metrics_file = self.base_path / "queue" / ".metrics.json"
+        metrics_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(metrics_file, 'w') as f:
+            json.dump(self.metrics, f)
+
     def _save_counters(self):
         """Save file counters to disk"""
         counter_file = self.base_path / "queue" / ".counters.json"
@@ -249,18 +277,38 @@ class FlashBladeQueue(QueueInterface):
     def increment_metric(self, name: str, amount: int = 1) -> bool:
         """Atomically increment a global metric"""
         with self.metrics_lock:
-            self.metrics[name] = self.metrics.get(name, 0) + amount
+            self._load_metrics()
+            val = self.metrics.get(name, 0)
+            if not isinstance(val, (int, float)):
+                val = 0
+            self.metrics[name] = val + amount
+            self._save_metrics()
         return True
     
-    def get_metrics(self, prefix: str = "") -> Dict[str, int]:
+    def set_metric(self, name: str, value: Any) -> bool:
+        """Set a global metric to a specific value"""
+        with self.metrics_lock:
+            self.metrics[name] = value
+            self._save_metrics()
+        return True
+
+    def get_metric(self, name: str) -> Any:
+        """Get the value of a specific metric"""
+        with self.metrics_lock:
+            self._load_metrics()
+            return self.metrics.get(name)
+
+    def get_metrics(self, prefix: str = "") -> Dict[str, Any]:
         """Get all metrics with given prefix"""
         with self.metrics_lock:
+            self._load_metrics()
             return {k: v for k, v in self.metrics.items() if k.startswith(prefix)}
     
     def clear_metrics(self) -> bool:
         """Clear all global metrics"""
         with self.metrics_lock:
             self.metrics.clear()
+            self._save_metrics()
         return True
 
 

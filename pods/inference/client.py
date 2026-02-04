@@ -192,6 +192,9 @@ def run_continuous_inference(triton_client, cpu_model, model_name, batch_size, q
     total_inferred = 0
     start_time = time.time()
     
+    # Threshold for business intelligence
+    FRAUD_THRESHOLD = 0.52  # 52% probability
+    
     while not STOP_FLAG:
         try:
             # Consume batch from features queue
@@ -233,26 +236,66 @@ def run_continuous_inference(triton_client, cpu_model, model_name, batch_size, q
                 log("⚠ Using simulation mode (no model available)")
                 results = np.random.rand(len(messages)).astype(np.float32)
             
-            # Prepare output messages and track buckets
+            # Prepare output messages and track metrics
             output_messages = []
             low_count = 0
             medium_count = 0
             high_count = 0
             
+            # NEW: Track category and state metrics
+            category_metrics = {}  # {category: {'count': 0, 'amount': 0, 'scores': []}}
+            state_metrics = {}     # {state: {'count': 0, 'amount': 0}}
+            
+            # NEW: Track recent high-risk transactions
+            recent_high_risk = []
+            
             for i, msg in enumerate(messages):
                 score = float(results[i])
                 output_msg = msg.copy()
                 output_msg['fraud_score'] = score
-                output_msg['fraud_prediction'] = int(score > 0.5)
+                output_msg['fraud_prediction'] = int(score >= FRAUD_THRESHOLD)
                 output_messages.append(output_msg)
                 
-                # Categorize for benchmarking distribution
+                # Categorize for risk distribution (0.0-1.0 scale)
                 if score < 0.6:
                     low_count += 1
                 elif score < 0.9:
                     medium_count += 1
                 else:
                     high_count += 1
+                
+                # NEW: Track high-risk transactions (>= threshold)
+                if score >= FRAUD_THRESHOLD:
+                    # Get transaction details
+                    category = msg.get('category', 'unknown')
+                    state = msg.get('state', 'unknown')
+                    amount = float(msg.get('amt', 0))
+                    
+                    # Update category metrics
+                    if category not in category_metrics:
+                        category_metrics[category] = {'count': 0, 'amount': 0.0, 'scores': []}
+                    category_metrics[category]['count'] += 1
+                    category_metrics[category]['amount'] += amount
+                    category_metrics[category]['scores'].append(score)
+                    
+                    # Update state metrics
+                    if state not in state_metrics:
+                        state_metrics[state] = {'count': 0, 'amount': 0.0}
+                    state_metrics[state]['count'] += 1
+                    state_metrics[state]['amount'] += amount
+                    
+                    # NEW: Store recent high-risk transaction details
+                    recent_high_risk.append({
+                        'risk_score': round(score, 3),
+                        'merchant': msg.get('merchant', 'Unknown'),
+                        'category': category,
+                        'amount': round(amount, 2),
+                        'cc_num': msg.get('cc_num', '0000000000000000'),
+                        'state': state,
+                        'first': msg.get('first', 'Unknown'),
+                        'last': msg.get('last', 'Unknown'),
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
+                    })
             
             # Publish to results queue
             queue_service.publish_batch(QueueTopics.INFERENCE_RESULTS, output_messages)
@@ -262,6 +305,44 @@ def run_continuous_inference(triton_client, cpu_model, model_name, batch_size, q
             queue_service.increment_metric("fraud_dist_medium", medium_count)
             queue_service.increment_metric("fraud_dist_high", high_count)
             queue_service.increment_metric("total_txns_scored", len(messages))
+            
+            # NEW: Track real total dollar volume (all transactions)
+            total_batch_amt = sum(float(m.get('amt', 0)) for m in messages)
+            queue_service.increment_metric("total_amount_processed", total_batch_amt)
+            
+            # NEW: Track real fraud dollar volume and count
+            fraud_batch_amt = sum(m['amount'] for m in recent_high_risk)
+            queue_service.increment_metric("total_fraud_amount_identified", fraud_batch_amt)
+            queue_service.increment_metric("fraud_blocked_count", len(recent_high_risk))
+            
+            # NEW: Publish category metrics
+            for category, metrics in category_metrics.items():
+                queue_service.increment_metric(f"category_{category}_count", metrics['count'])
+                queue_service.increment_metric(f"category_{category}_amount", metrics['amount'])
+                # Store average risk score
+                avg_score = sum(metrics['scores']) / len(metrics['scores']) if metrics['scores'] else 0
+                queue_service.set_metric(f"category_{category}_avg_score", avg_score)
+            
+            # NEW: Publish state metrics
+            for state, metrics in state_metrics.items():
+                queue_service.increment_metric(f"state_{state}_count", metrics['count'])
+                queue_service.increment_metric(f"state_{state}_amount", metrics['amount'])
+            
+            # NEW: Publish recent high-risk transactions (keep last 100, dashboard will show last 10)
+            if recent_high_risk:
+                try:
+                    # Store in queue as a list (most recent first)
+                    existing_recent = queue_service.get_metric("recent_high_risk_transactions") or []
+                    if isinstance(existing_recent, (int, float)):
+                        existing_recent = []
+                    
+                    # Prepend new transactions and keep last 100
+                    updated_recent = (recent_high_risk + existing_recent)[:100]
+                    queue_service.set_metric("recent_high_risk_transactions", updated_recent)
+                    
+                    log(f"✓ Published {len(recent_high_risk)} high-risk transactions")
+                except Exception as e:
+                    log(f"⚠ Failed to publish recent transactions: {e}")
             
             total_inferred += len(messages)
             elapsed = time.time() - start_time
@@ -273,13 +354,18 @@ def run_continuous_inference(triton_client, cpu_model, model_name, batch_size, q
             mem = psutil.virtual_memory()
             mem_gb = mem.used / (1024 ** 3)
             
-            log(f"Inferred: {total_inferred:,} | Throughput: {throughput:,.0f} rows/sec | CPU: {cpu_cores:.1f} cores | RAM: {mem.percent:.1f}%")
+            # Enhanced logging
+            high_risk_count = sum(m['count'] for m in category_metrics.values())
+            log(f"Inferred: {total_inferred:,} | Throughput: {throughput:,.0f} rows/sec | "
+                f"High-Risk: {high_risk_count} | Categories: {len(category_metrics)} | "
+                f"CPU: {cpu_cores:.1f} cores | RAM: {mem.percent:.1f}%")
             
         except Exception as e:
             log(f"Error in continuous inference: {e}")
             import traceback
             traceback.print_exc()
             time.sleep(1)
+
 
 def run_triton_inference(triton_client, model_name, input_data):
     """Run batch inference on Triton"""
