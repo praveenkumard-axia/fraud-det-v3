@@ -23,7 +23,7 @@ from config_contract import QueueTopics, StoragePaths, GenerationRateLimits
 from queue_interface import get_queue_service
 
 # Configuration
-PYTHON_EXE = "/home/anuj/Axia/myenv/bin/python"  # Use the virtual environment
+PYTHON_EXE = ".venv/bin/python3"  # Use the virtual environment
 THRESHOLD_TO_START = 10  # Files needed before starting downstream (Lowered for fast testing)
 CHECK_INTERVAL = 2              # Seconds between backlog checks
 

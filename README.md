@@ -48,6 +48,27 @@ Deploy the contents of the `pods/` directory as independent containers:
 3.  `pods/model-build`: CronJob or singleton Deployment.
 4.  `pods/inference`: Autoscale 2-20 replicas based on `features-ready` queue depth.
 
+**Quick Start:**
+```bash
+# Build and deploy
+./k8s/build-images.sh
+kubectl apply -f k8s/
+
+# Start the pipeline
+kubectl scale deployment -n fraud-pipeline data-gather --replicas=1
+kubectl scale deployment -n fraud-pipeline preprocessing-cpu --replicas=1
+kubectl scale deployment -n fraud-pipeline inference-cpu --replicas=2
+
+# Stop the pipeline
+kubectl scale deployment -n fraud-pipeline data-gather preprocessing-cpu inference-cpu --replicas=0
+
+# Monitor
+kubectl get pods -n fraud-pipeline
+kubectl logs -n fraud-pipeline deployment/data-gather --tail=20
+```
+
+*See `k8s/README.md` for complete deployment instructions and troubleshooting.*
+
 ### 3. Critical Environment Variables
 | Variable | Default | Description |
 |----------|---------|-------------|
