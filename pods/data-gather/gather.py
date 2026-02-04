@@ -367,7 +367,7 @@ def main():
                 stable_files = [f for f in files if time.time() - f.stat().st_mtime > 2.0]
                 
                 if stable_files:
-                    # Read 50 stable files and publish (Hype-accelerated for Redis demo)
+                    # Read 50 stable files and publish to FlashBlade queue
                     recent_files = sorted(stable_files, key=lambda x: x.stat().st_mtime, reverse=True)[:50]
                     for file in recent_files:
                         try:

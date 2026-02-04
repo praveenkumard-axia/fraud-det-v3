@@ -1,5 +1,5 @@
 # Pod 5: CPU inference
-# Image: lightweight inference client or CPU model server (e.g. pods/inference with CPU runtime)
+# Shared volume: reads queue/features-ready/*, writes queue/inference-results/* (no Redis).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -27,9 +27,14 @@ spec:
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
-              value: "redis"
+              value: "flashblade"
+            - name: FLASHBLADE_PATH
+              value: "/mnt/flashblade"
             - name: PYTHONUNBUFFERED
               value: "1"
+          volumeMounts:
+            - name: flashblade
+              mountPath: /mnt/flashblade
           resources:
             requests:
               cpu: "500m"
@@ -37,3 +42,7 @@ spec:
             limits:
               cpu: "2000m"
               memory: "4Gi"
+      volumes:
+        - name: flashblade
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-flashblade

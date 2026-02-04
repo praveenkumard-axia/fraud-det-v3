@@ -4,6 +4,7 @@ Backend Server for Dashboard v5 - Continuous Pipeline
 Orchestrates 4 pods with queue-based communication and real-time control
 """
 
+import json
 import os
 import sys
 import time
@@ -23,6 +24,7 @@ import uvicorn
 # Import queue and config modules
 from queue_interface import get_queue_service
 from k8s_scale import scale_pod
+from metrics_collector import run_one_poll, METRICS_JSON_PATH
 from config_contract import (
     QueueTopics, StoragePaths, ScalingConfig, BacklogThresholds,
     SystemPriorities, GenerationRateLimits, get_env
@@ -323,7 +325,7 @@ def get_dashboard_data():
     fraud_rate = 0.005
     avg_txn_amount = 50
     
-    # Get REAL risk distribution from Redis
+    # Get REAL risk distribution from FlashBlade/file queue
     risk_metrics = state.queue_service.get_metrics("fraud_dist_")
     real_low = risk_metrics.get("fraud_dist_low", 0)
     real_medium = risk_metrics.get("fraud_dist_medium", 0)
@@ -411,38 +413,62 @@ def get_dashboard_data():
 
 @app.post("/api/control/start")
 async def start_pipeline(background_tasks: BackgroundTasks):
-    """Start the pipeline"""
+    """Start the pipeline by scaling K8s deployments to default replicas (fraud-pipeline namespace)."""
     if state.is_running:
         return {"success": False, "message": "Pipeline already running"}
-    
-    # Reset telemetry
+
+    # Scale all deployments (CPU + GPU) to defaults
+    defaults = {
+        "data-gather": ScalingConfig.DEPLOYMENTS["data-gather"]["default_replicas"],
+        "preprocessing-cpu": ScalingConfig.DEPLOYMENTS["preprocessing"]["default_replicas"],
+        "inference-cpu": ScalingConfig.DEPLOYMENTS["inference"]["default_replicas"],
+        "preprocessing-gpu": ScalingConfig.DEPLOYMENTS["preprocessing-gpu"]["default_replicas"],
+        "model-build": ScalingConfig.DEPLOYMENTS["training"]["default_replicas"],
+        "inference-gpu": ScalingConfig.DEPLOYMENTS["inference-gpu"]["default_replicas"],
+    }
+    errors = []
+    for pod_key, replicas in defaults.items():
+        ok, msg = scale_pod(pod_key, replicas)
+        if not ok:
+            errors.append(f"{pod_key}: {msg}")
+        else:
+            if pod_key == "data-gather":
+                state.pod_counts["generation"] = replicas
+            elif pod_key == "preprocessing-cpu":
+                state.pod_counts["preprocessing"] = replicas
+            elif pod_key == "inference-cpu":
+                state.pod_counts["inference"] = replicas
+            elif pod_key == "preprocessing-gpu":
+                state.pod_counts["preprocessing_gpu"] = replicas
+            elif pod_key == "model-build":
+                state.pod_counts["training"] = replicas
+            elif pod_key == "inference-gpu":
+                state.pod_counts["inference_gpu"] = replicas
+
+    if errors:
+        return {"success": False, "message": "Some scales failed", "errors": errors}
+
     state.reset()
-    
-    # Run in background
-    background_tasks.add_task(run_pipeline_sequence)
-    
-    return {"success": True, "message": "Pipeline started"}
+    state.is_running = True
+    state.start_time = time.time()
+    return {"success": True, "message": "Pipeline started (K8s pods scaled up)", "replicas": defaults}
 
 
 @app.post("/api/control/stop")
 async def stop_pipeline():
-    """Stop all running pods"""
-    if not state.is_running:
-        return {"success": False, "message": "Pipeline not running"}
-    
-    # Terminate all processes
-    for pod_name, process in list(state.processes.items()):
-        try:
-            process.terminate()
-            process.wait(timeout=5)
-        except Exception as e:
-            print(f"Error stopping {pod_name}: {e}")
-            process.kill()
-    
+    """Stop the pipeline by scaling all K8s deployments to 0 (fraud-pipeline namespace)."""
+    for pod_key in ["data-gather", "preprocessing-cpu", "inference-cpu", "preprocessing-gpu", "model-build", "inference-gpu"]:
+        scale_pod(pod_key, 0)
+
+    state.pod_counts["generation"] = 0
+    state.pod_counts["preprocessing"] = 0
+    state.pod_counts["inference"] = 0
+    state.pod_counts["preprocessing_gpu"] = 0
+    state.pod_counts["training"] = 0
+    state.pod_counts["inference_gpu"] = 0
     state.processes.clear()
     state.is_running = False
-    
-    return {"success": True, "message": "Pipeline stopped"}
+    return {"success": True, "message": "Pipeline stopped (K8s pods scaled to 0)"}
 
 
 @app.post("/api/control/reset")
@@ -465,8 +491,9 @@ async def scale_pods(config: ScaleConfig):
 
 @app.get("/api/control/scale")
 async def get_scale_config():
-    """Get current scaling configuration"""
+    """Get current scaling configuration and pipeline status"""
     return {
+        "is_running": state.is_running,
         "preprocessing_pods": state.pod_counts["preprocessing"],
         "training_pods": state.pod_counts["training"],
         "inference_pods": state.pod_counts["inference"],
@@ -754,6 +781,79 @@ async def websocket_metrics(websocket: WebSocket):
         print("WebSocket client disconnected")
     except Exception as e:
         print(f"WebSocket error: {e}")
+
+
+# ==================== Dashboard metrics (JSON + WebSocket) ====================
+
+async def _metrics_poll_loop():
+    """Background: poll every 1s, write structured JSON for dashboard."""
+    from k8s_scale import NAMESPACE
+    while True:
+        try:
+            with state.lock:
+                telemetry = state.telemetry.copy()
+            await asyncio.to_thread(
+                run_one_poll,
+                state.queue_service,
+                telemetry,
+                namespace=NAMESPACE,
+                path=METRICS_JSON_PATH,
+            )
+        except Exception as e:
+            print(f"Metrics poll error: {e}")
+        await asyncio.sleep(1)
+
+
+@app.on_event("startup")
+async def start_metrics_poller():
+    """Start the 1s metrics collector loop."""
+    asyncio.create_task(_metrics_poll_loop())
+
+
+@app.websocket("/data/dashboard")
+async def websocket_dashboard(websocket: WebSocket):
+    """Emit dashboard metrics from JSON file every 1.2s. Connect: ws://<host>/data/dashboard"""
+    await websocket.accept()
+    try:
+        while True:
+            try:
+                if METRICS_JSON_PATH.exists():
+                    with open(METRICS_JSON_PATH, "r") as f:
+                        data = json.load(f)
+                else:
+                    data = {
+                        "cpu": [], "gpu": [], "fb": [],
+                        "kpis": {
+                            "1_fraud_exposure_identified_usd": 0, "2_transactions_analyzed": 0,
+                            "3_high_risk_flagged": 0, "4_decision_latency_ms": 0, "5_precision_at_threshold": 0,
+                            "6_fraud_rate_pct": 0, "7_alerts_per_1m": 0, "8_high_risk_txn_rate": 0,
+                            "9_annual_savings_usd": 0, "10_risk_distribution": {"low_0_60": 0, "medium_60_90": 0, "high_90_100": 0},
+                            "11_fraud_velocity_per_min": 0, "12_category_risk": {}, "13_risk_concentration_pct": 0,
+                            "14_state_risk": {}, "15_recall": 0, "16_false_positive_rate": 0, "17_flashblade_util_pct": 0,
+                        },
+                        "business": {
+                            "no_of_generated": 0, "no_of_processed": 0,
+                            "no_fraud": 0, "no_blocked": 0,
+                            "pods": {
+                                "generation": {"no_of_generated": 0, "stream_speed": 0},
+                                "prep": {"no_of_transformed": 0, "prep_velocity": 0},
+                                "model_train": {"samples_trained": 0, "status": "Idle"},
+                                "inference": {"fraud": 0, "non_fraud": 0, "percent_score": 0},
+                            },
+                        },
+                        "timestamp": time.time(),
+                    }
+                # Add live state and elapsed for dashboard
+                data["is_running"] = state.is_running
+                data["elapsed_sec"] = (time.time() - state.start_time) if state.start_time else 0
+                await websocket.send_json(data)
+            except Exception as e:
+                print(f"Dashboard WS read/send error: {e}")
+            await asyncio.sleep(1.2)
+    except WebSocketDisconnect:
+        print("Dashboard WebSocket client disconnected")
+    except Exception as e:
+        print(f"Dashboard WebSocket error: {e}")
 
 
 # ==================== Server Startup ====================

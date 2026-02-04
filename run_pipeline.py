@@ -45,7 +45,7 @@ class ProcessManager:
             pod_env = os.environ.copy()
             pod_env["PYTHONUNBUFFERED"] = "1"
             pod_env["CONTINUOUS_MODE"] = "true"
-            pod_env["QUEUE_TYPE"] = "redis"  # Force redis for cross-process comms
+            pod_env["QUEUE_TYPE"] = "flashblade"  # Force flashblade for cross-process comms
             if env:
                 pod_env.update(env)
 

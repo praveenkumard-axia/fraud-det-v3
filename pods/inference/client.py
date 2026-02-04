@@ -257,7 +257,7 @@ def run_continuous_inference(triton_client, cpu_model, model_name, batch_size, q
             # Publish to results queue
             queue_service.publish_batch(QueueTopics.INFERENCE_RESULTS, output_messages)
             
-            # Update Global Metrics for Dashboard (Atomic increments in Redis)
+            # Update Global Metrics for Dashboard (atomic increments on FlashBlade/file queue)
             queue_service.increment_metric("fraud_dist_low", low_count)
             queue_service.increment_metric("fraud_dist_medium", medium_count)
             queue_service.increment_metric("fraud_dist_high", high_count)

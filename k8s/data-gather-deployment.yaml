@@ -1,5 +1,6 @@
 # Pod 1: CPU generation (data-gather) - scale for txns/sec 1K–50K
-# Image: build from pods/data-gather/Dockerfile
+# Image: build from pods/data-gather/Dockerfile.repo
+# Shared volume: writes to queue/raw-transactions/* on /mnt/flashblade (no Redis).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -27,9 +28,14 @@ spec:
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
-              value: "redis"
+              value: "flashblade"
+            - name: FLASHBLADE_PATH
+              value: "/mnt/flashblade"
             - name: PYTHONUNBUFFERED
               value: "1"
+          volumeMounts:
+            - name: flashblade
+              mountPath: /mnt/flashblade
           resources:
             requests:
               cpu: "500m"
@@ -37,3 +43,7 @@ spec:
             limits:
               cpu: "2000m"
               memory: "2Gi"
+      volumes:
+        - name: flashblade
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-flashblade
