@@ -36,8 +36,16 @@ make load-minikube
 
 ### 3. Deploy
 
+**Option A: CPU Machine + Local SSD**
+Host must have directory `/mnt/data/fraud-pipeline` created.
 ```bash
-make deploy
+make deploy-cpu
+```
+
+**Option B: GPU Machine + FlashBlade**
+Nodes must have NVIDIA GPUs and connect to FlashBlade via `pure-file` StorageClass.
+```bash
+make deploy-gpu
 ```
 
 ### 4. Port-forward backend and start pipeline
@@ -53,10 +61,20 @@ Serve `dashboard-v4-preview.html` with `DASHBOARD_BACKEND_URL=http://localhost:8
 
 ### 6. Benchmark
 
-The pipeline itself is the benchmark. Use the dashboard (Business + Tech tabs) or:
+The pipeline generation rate (transactions/sec) is the primary benchmark control.
 
+**Run Load Test:**
+1. Open Dashboard -> "Control" Tab.
+2. Set "Target Rate" (e.g., 5000 for CPU, 50000 + for GPU).
+3. Click "Start".
+4. Monitor "Throughput" on the dashboard.
+
+**Metrics via CLI:**
 ```bash
+# Business metrics (latency, fraud rate)
 curl -s http://localhost:8000/api/business/metrics | jq .
+
+# Machine metrics (CPU/GPU utilization, queue depth)
 curl -s http://localhost:8000/api/machine/metrics | jq .
 ```
 
@@ -75,8 +93,10 @@ make stop
 | `make build` | Build all Docker images |
 | `make build-no-cache` | Build with --no-cache |
 | `make load-kind` | Load images into Kind cluster |
-| `make load-minikube` | Build into Minikube (no Kind needed) |
-| `make deploy` | Apply k8s/fraud-pipeline-all.yaml |
+| `make load-minikube` | Build into Minikube (no separate load step) |
+| `make deploy-cpu` | **NEW:** Deploy CPU + Local SSD config |
+| `make deploy-gpu` | **NEW:** Deploy GPU + FlashBlade config |
+| `make deploy` | Deploy default legacy all-in-one manifest |
 | `make start` | Start pipeline (scale deployments up) |
 | `make stop` | Stop pipeline (scale to 0) |
 | `make port-forward` | Port-forward backend to localhost:8000 |
@@ -92,8 +112,8 @@ make stop
 | Resource | Purpose |
 |----------|---------|
 | Namespace | fraud-pipeline |
-| PVC | fraud-pipeline-flashblade (50Gi) |
-| Deployments | data-gather, preprocessing-cpu, preprocessing-gpu, model-build, inference-cpu, inference-gpu, backend |
+| PVC | fraud-pipeline-flashblade (or local-pvc) |
+| Deployments | data-gather, preprocessing-cpu/gpu, model-build, inference-cpu/gpu, backend |
 | Services | backend, inference-gpu |
 
 ---
@@ -102,7 +122,7 @@ make stop
 
 Set on backend deployment:
 
-**Local disk:**
+**Local disk / General:**
 ```bash
 kubectl set env deployment/backend -n fraud-pipeline PROMETHEUS_URL=http://prometheus.monitoring:9090
 ```
