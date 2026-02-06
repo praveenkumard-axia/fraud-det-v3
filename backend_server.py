@@ -18,6 +18,8 @@ from typing import Dict, Optional, List
 
 from fastapi import FastAPI, BackgroundTasks, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import uvicorn
 
@@ -45,6 +47,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve static files (dashboard HTML)
+@app.get("/dashboard-v4-preview.html")
+async def serve_dashboard():
+    return FileResponse(BASE_DIR / "dashboard-v4-preview.html", media_type="text/html")
 
 
 # ==================== Data Models ====================
