@@ -22,8 +22,8 @@ sys.path.insert(0, str(BASE_DIR))
 from config_contract import QueueTopics, StoragePaths, GenerationRateLimits
 from queue_interface import get_queue_service
 
-# Configuration
-PYTHON_EXE = "/home/anuj/Axia/myenv/bin/python3"  # Use myenv python
+# Configuration (use current interpreter so it works in venv or system)
+PYTHON_EXE = sys.executable
 THRESHOLD_TO_START = 5      # Lowered for faster testing
 CHECK_INTERVAL = 1          # Faster checks
 

@@ -839,6 +839,26 @@ async def get_backlog_pressure():
 
 # ==================== BUSINESS INTELLIGENCE API ====================
 
+def _business_metadata(state, total_transactions: int, fraud_blocked: int, elapsed_hours: float) -> dict:
+    """Build metadata dict for business metrics, including queue path and optional note when no data."""
+    meta = {
+        "total_transactions": total_transactions,
+        "high_risk_count": fraud_blocked,
+        "threshold": 0.52,
+        "elapsed_hours": round(elapsed_hours, 2),
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "cache_hit": False,
+        "data_source": "telemetry + queue_service",
+        "queue_metrics_path": str(getattr(state.queue_service, "base_path", "")),
+    }
+    if total_transactions == 0:
+        meta["note"] = (
+            "Business metrics come from inference pod writing to queue. "
+            "Ensure run_pipeline is running and inference is consuming from features-ready (same path as queue_metrics_path)."
+        )
+    return meta
+
+
 @app.get("/api/business/metrics")
 async def get_business_metrics():
     """
@@ -1102,16 +1122,7 @@ async def get_business_metrics():
         # State Risk (proportional to real fraud_blocked)
         "state_risk": state_risk,
         
-        # Metadata (REAL)
-        "metadata": {
-            "total_transactions": total_transactions,
-            "high_risk_count": fraud_blocked,
-            "threshold": THRESHOLD,
-            "elapsed_hours": round(elapsed_hours, 2),
-            "timestamp": datetime.utcnow().isoformat() + 'Z',
-            "cache_hit": False,
-            "data_source": "telemetry + queue_service"
-        }
+        "metadata": _business_metadata(state, total_transactions, fraud_blocked, elapsed_hours),
     }
 
 

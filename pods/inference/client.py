@@ -18,8 +18,12 @@ import os
 from pathlib import Path
 from datetime import datetime
 
-import tritonclient.http as httpclient
-from tritonclient.utils import InferenceServerException
+try:
+    import tritonclient.http as httpclient  # type: ignore[import-untyped]
+    from tritonclient.utils import InferenceServerException  # type: ignore[import-untyped]
+except ImportError:
+    httpclient = None  # type: ignore[misc, assignment]
+    InferenceServerException = Exception
 
 # XGBoost for CPU fallback
 import xgboost as xgb
@@ -113,25 +117,29 @@ def main():
     log(f"Mode: {'Continuous' if continuous_mode else 'Single-shot'}")
     log("=" * 70)
     
-    # Connect to Triton
-    try:
-        triton_client = httpclient.InferenceServerClient(url=triton_url, verbose=False)
-        if not triton_client.is_server_live():
-            log("Triton server is not live")
+    # Connect to Triton (skip if tritonclient not installed)
+    triton_client = None
+    if httpclient is not None:
+        try:
+            triton_client = httpclient.InferenceServerClient(url=triton_url, verbose=False)
+            if not triton_client.is_server_live():
+                log("Triton server is not live")
+                if not continuous_mode:
+                    sys.exit(1)
+                else:
+                    log("Triton not available, loading XGBoost model for CPU inference...")
+                    triton_client = None
+            else:
+                log("✓ Triton server is live")
+        except Exception as e:
+            log(f"Failed to connect to Triton server: {e}")
             if not continuous_mode:
                 sys.exit(1)
             else:
                 log("Triton not available, loading XGBoost model for CPU inference...")
                 triton_client = None
-        else:
-            log("✓ Triton server is live")
-    except Exception as e:
-        log(f"Failed to connect to Triton server: {e}")
-        if not continuous_mode:
-            sys.exit(1)
-        else:
-            log("Triton not available, loading XGBoost model for CPU inference...")
-            triton_client = None
+    else:
+        log("tritonclient not installed, using CPU inference (XGBoost or simulation)")
     
     # Load CPU model if Triton not available
     cpu_model = None

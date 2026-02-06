@@ -138,14 +138,17 @@ class FlashBladeQueue(QueueInterface):
                 self.counters = {}
     
     def _load_metrics(self):
-        """Load global metrics from disk"""
+        """Load global metrics from disk. On error, keep existing in-memory metrics."""
         metrics_file = self.base_path / "queue" / ".metrics.json"
-        if metrics_file.exists():
-            try:
-                with open(metrics_file, 'r') as f:
-                    self.metrics = json.load(f)
-            except:
-                self.metrics = {}
+        if not metrics_file.exists():
+            return
+        try:
+            with open(metrics_file, 'r') as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                self.metrics = data
+        except Exception:
+            pass
 
     def _save_metrics(self):
         """Save global metrics to disk"""
@@ -274,8 +277,8 @@ class FlashBladeQueue(QueueInterface):
             print(f"Error clearing {topic}: {e}")
             return False
     
-    def increment_metric(self, name: str, amount: int = 1) -> bool:
-        """Atomically increment a global metric"""
+    def increment_metric(self, name: str, amount: float = 1) -> bool:
+        """Atomically increment a global metric (amount may be int or float)."""
         with self.metrics_lock:
             self._load_metrics()
             val = self.metrics.get(name, 0)
