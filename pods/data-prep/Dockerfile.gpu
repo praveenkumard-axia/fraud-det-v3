@@ -1,0 +1,22 @@
+# GPU data-prep (RAPIDS) built from repo root so queue_interface + config_contract are in the image.
+# Build: docker build -t fraud-pipeline/preprocessing-gpu:latest -f pods/data-prep/Dockerfile.gpu .
+FROM nvcr.io/nvidia/rapidsai/base:24.02-cuda12.0-py3.10
+
+ENV RAPIDS_NO_INITIALIZE=1
+ENV CUDF_LOGGING_LEVEL=CRITICAL
+ENV DASK_DISTRIBUTED__LOGGING__DISTRIBUTED=critical
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir polars numpy>=1.24.0 psutil
+
+COPY queue_interface.py config_contract.py ./
+COPY pods/data-prep/prepare.py ./
+
+ENV PYTHONPATH=/app
+ENV QUEUE_TYPE=flashblade
+ENV FLASHBLADE_PATH=/mnt/flashblade
+ENV CONTINUOUS_MODE=true
+
+CMD ["python", "prepare.py"]

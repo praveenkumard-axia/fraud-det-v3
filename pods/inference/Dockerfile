@@ -12,7 +12,8 @@ RUN pip install --no-cache-dir \
     numpy==1.26.3
 
 # Copy configuration files
-COPY config/ /workspace/config/
+COPY queue_interface.py config_contract.py ./
+COPY pods/inference/client.py ./
 
 # Set environment variables
 ENV FA_MOUNT=/root/ebiser/nvidia.financial.fraud.detection

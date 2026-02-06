@@ -3,3 +3,4 @@ xgboost>=1.7.0
 pyarrow>=12.0.0
 pandas>=2.0.0  # Fallback/Compat
 psutil
+polars

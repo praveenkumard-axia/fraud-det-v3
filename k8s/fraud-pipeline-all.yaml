@@ -1,0 +1,483 @@
+# Fraud Pipeline - All-in-one manifest
+# Apply: kubectl apply -f k8s/fraud-pipeline-all.yaml
+# All pods share volume fraud-pipeline-flashblade at /mnt/flashblade
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fraud-pipeline
+  labels:
+    app.kubernetes.io/name: fraud-pipeline
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fraud-pipeline-flashblade
+  namespace: fraud-pipeline
+  labels:
+    app: "fraud-pipeline"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+---
+# Pod 1: CPU generation (data-gather) - scale for txns/sec 1K–50K
+# TestDrive-AI: 8 cores, 16Gi for high-throughput generation
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-gather
+  namespace: fraud-pipeline
+  labels:
+    app: "data-gather"
+    tier: "generation"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "data-gather"
+  template:
+    metadata:
+      labels:
+        app: "data-gather"
+        tier: "generation"
+    spec:
+      containers:
+        - name: data-gather
+          image: fraud-pipeline/data-gather:latest
+          imagePullPolicy: Never
+          env:
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "flashblade"
+            - name: FLASHBLADE_PATH
+              value: "/mnt/flashblade"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: GENERATION_RATE
+              value: "50000"
+            - name: NUM_WORKERS
+              value: "8"
+            - name: CHUNK_SIZE
+              value: "50000"
+          volumeMounts:
+            - name: flashblade
+              mountPath: /mnt/flashblade
+          resources:
+            requests:
+              cpu: "2000m"
+              memory: "4Gi"
+            limits:
+              cpu: "8000m"
+              memory: "16Gi"
+      volumes:
+        - name: flashblade
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-flashblade
+---
+# Pod 2: CPU preprocessing (Polars)
+# TestDrive-AI: 8 cores, 32Gi
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: preprocessing-cpu
+  namespace: fraud-pipeline
+  labels:
+    app: "preprocessing-cpu"
+    tier: "preprocessing"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "preprocessing-cpu"
+  template:
+    metadata:
+      labels:
+        app: "preprocessing-cpu"
+        tier: "preprocessing"
+    spec:
+      containers:
+        - name: preprocessing-cpu
+          image: fraud-pipeline/preprocessing-cpu:latest
+          imagePullPolicy: Never
+          env:
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "flashblade"
+            - name: FLASHBLADE_PATH
+              value: "/mnt/flashblade"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: flashblade
+              mountPath: /mnt/flashblade
+          resources:
+            requests:
+              cpu: "2000m"
+              memory: "8Gi"
+            limits:
+              cpu: "8000m"
+              memory: "32Gi"
+      volumes:
+        - name: flashblade
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-flashblade
+---
+# Pod 3: GPU preprocessing (RAPIDS) - L40S
+# TestDrive-AI: 4 cores, 32Gi, 1 GPU
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: preprocessing-gpu
+  namespace: fraud-pipeline
+  labels:
+    app: "preprocessing-gpu"
+    tier: "preprocessing"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "preprocessing-gpu"
+  template:
+    metadata:
+      labels:
+        app: "preprocessing-gpu"
+        tier: "preprocessing"
+    spec:
+      containers:
+        - name: preprocessing-gpu
+          image: fraud-pipeline/preprocessing-gpu:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "flashblade"
+            - name: FLASHBLADE_PATH
+              value: "/mnt/flashblade"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: flashblade
+              mountPath: /mnt/flashblade
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4000m"
+              memory: "32Gi"
+              nvidia.com/gpu: "1"
+      volumes:
+        - name: flashblade
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-flashblade
+---
+# Pod 4: GPU model training (XGBoost/RAPIDS) - L40S
+# TestDrive-AI: 8 cores, 64Gi, 1 GPU
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-build
+  namespace: fraud-pipeline
+  labels:
+    app: "model-build"
+    tier: "training"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "model-build"
+  template:
+    metadata:
+      labels:
+        app: "model-build"
+        tier: "training"
+    spec:
+      containers:
+        - name: model-build
+          image: fraud-pipeline/model-build:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "flashblade"
+            - name: FLASHBLADE_PATH
+              value: "/mnt/flashblade"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: flashblade
+              mountPath: /mnt/flashblade
+          resources:
+            requests:
+              cpu: "2000m"
+              memory: "16Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "8000m"
+              memory: "64Gi"
+              nvidia.com/gpu: "1"
+      volumes:
+        - name: flashblade
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-flashblade
+---
+# Pod 5: CPU inference (XGBoost fallback)
+# TestDrive-AI: 4 cores, 16Gi
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-cpu
+  namespace: fraud-pipeline
+  labels:
+    app: "inference-cpu"
+    tier: "inference"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "inference-cpu"
+  template:
+    metadata:
+      labels:
+        app: "inference-cpu"
+        tier: "inference"
+    spec:
+      containers:
+        - name: inference-cpu
+          image: fraud-pipeline/inference-cpu:latest
+          imagePullPolicy: Never
+          env:
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "flashblade"
+            - name: FLASHBLADE_PATH
+              value: "/mnt/flashblade"
+            - name: TRITON_URL
+              value: "inference-gpu:8001"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: flashblade
+              mountPath: /mnt/flashblade
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "4Gi"
+            limits:
+              cpu: "4000m"
+              memory: "16Gi"
+      volumes:
+        - name: flashblade
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-flashblade
+---
+# Pod 6: GPU inference (Triton FIL) - L40S
+# TestDrive-AI: 4 cores, 32Gi, 1 GPU
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-gpu
+  namespace: fraud-pipeline
+  labels:
+    app: "inference-gpu"
+    tier: "inference"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "inference-gpu"
+  template:
+    metadata:
+      labels:
+        app: "inference-gpu"
+        tier: "inference"
+    spec:
+      containers:
+        - name: inference-gpu
+          image: fraud-pipeline/inference-gpu:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+            - containerPort: 8001
+              name: grpc
+            - containerPort: 8002
+              name: metrics
+          env:
+            - name: QUEUE_TYPE
+              value: "flashblade"
+            - name: FLASHBLADE_PATH
+              value: "/mnt/flashblade"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: flashblade
+              mountPath: /mnt/flashblade
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4000m"
+              memory: "32Gi"
+              nvidia.com/gpu: "1"
+      volumes:
+        - name: flashblade
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-flashblade
+---
+# Service for inference-gpu (Triton) - inference-cpu connects at inference-gpu:8001
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-gpu
+  namespace: fraud-pipeline
+  labels:
+    app: "inference-gpu"
+spec:
+  selector:
+    app: "inference-gpu"
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+    - name: grpc
+      port: 8001
+      targetPort: 8001
+    - name: metrics
+      port: 8002
+      targetPort: 8002
+---
+# ServiceAccount + RBAC for backend (kubectl scale/patch)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fraud-backend
+  namespace: fraud-pipeline
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fraud-backend-role
+  namespace: fraud-pipeline
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fraud-backend-binding
+  namespace: fraud-pipeline
+subjects:
+  - kind: ServiceAccount
+    name: fraud-backend
+    namespace: fraud-pipeline
+roleRef:
+  kind: Role
+  name: fraud-backend-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fraud-backend-nodes
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fraud-backend-nodes-binding
+subjects:
+  - kind: ServiceAccount
+    name: fraud-backend
+    namespace: fraud-pipeline
+roleRef:
+  kind: ClusterRole
+  name: fraud-backend-nodes
+  apiGroup: rbac.authorization.k8s.io
+---
+# Backend: Dashboard API (FastAPI + kubectl)
+# TestDrive-AI: 1 core, 1Gi
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: fraud-pipeline
+  labels:
+    app: "backend"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "backend"
+  template:
+    metadata:
+      labels:
+        app: "backend"
+    spec:
+      serviceAccountName: fraud-backend
+      containers:
+        - name: backend
+          image: fraud-pipeline/backend:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: QUEUE_TYPE
+              value: "flashblade"
+            - name: FLASHBLADE_PATH
+              value: "/mnt/flashblade"
+            # Prometheus: disk or FlashBlade metrics (optional; set for storage read/write in dashboard)
+            - name: PROMETHEUS_URL
+              value: ""  # e.g. "http://prometheus.monitoring:9090" - see k8s/README.md
+            # Pure Storage: set "true" to enable Pure1 + FlashBlade-specific metrics
+            - name: PURE_SERVER
+              value: "false"
+          volumeMounts:
+            - name: flashblade
+              mountPath: /mnt/flashblade
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+      volumes:
+        - name: flashblade
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-flashblade
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: fraud-pipeline
+  labels:
+    app: "backend"
+spec:
+  selector:
+    app: "backend"
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

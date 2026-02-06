@@ -1,99 +1,124 @@
-# 🦅 Spearhead Fraud Detection - Continuous Pipeline
+# Fraud Detection Pipeline
 
-Real-time, non-blocking fraud detection pipeline designed for High-Throughput streaming environments (FlashBlade or SSD only; no Redis).
+Real-time fraud detection pipeline with file-based queueing on shared storage (FlashBlade or PVC). Deploy to Kubernetes and benchmark via the dashboard.
 
-## 🏗️ Architecture Overview
+## Architecture
 
-The system operates as a series of decoupled microservices (Pods) communicating through a **shared volume** at `/mnt/flashblade`. All queue data and artifacts are file-based; each stage reads and writes in separate subdirectories.
-
-```text
-Synthetic Generator  → [ /mnt/flashblade/queue/raw-transactions ] → Data Prep
-                                                                         ↓
-[ /mnt/flashblade/queue/inference-results ] ← Inference ← [ queue/features-ready ]
-                                                 ↓                       ↓
-                                        [ Real-time Business BI ] ← [ Model Training ]
-                                                 ↑                       ↑
-                                     [ /mnt/flashblade: metrics, models, logs, raw-data ]
+```
+Generator (data-gather) → [raw-transactions] → Data Prep (preprocessing-cpu/gpu)
+                                                      ↓
+Inference (inference-cpu/gpu) ← [features-ready] ← Model (model-build)
+       ↓
+[inference-results] → Backend (dashboard API + metrics)
 ```
 
----
+All pods share volume at `/mnt/flashblade`. Backend provides REST API, WebSocket metrics, and dashboard control.
 
-## 🚀 Business Intelligence & Real-time Metrics
+## Quick Start
 
-The system now includes a fully integrated **Business Intelligence API** that provides real-time transaction insights derived directly from the live pipeline.
+### 1. Build images
 
-### **1. Real-time Data Flow**
-- **Inference Pod**: Analyzes every transaction, calculates risk scores (0.0-1.0), and publishes real-time aggregations (Category risk, State risk, Dollar volume) to the shared `queue_service`.
-- **Queue Service**: Persists global metrics to the shared volume (`.metrics.json`), enabling atomic updates and cross-process communication between pipeline pods and the backend.
-- **Backend API**: Consumes live metrics and exposes a single-endpoint Business Intelligence interface.
-
-### **2. Business API Features**
-- ✅ **100% Data-Driven**: No hardcoded placeholders; all metrics (even dollar amounts) are summed from the live stream.
-- ✅ **17 Key Performance Indicators (KPIs)**: Includes Fraud Exposure, Annual Savings, Precision/Recall, and Fraud Velocity.
-- ✅ **Risk Concentration**: Real-time calculation of the Top 1% of transactions contributing to fraud.
-- ✅ **Category & Geographic Analysis**: Top risk categories and hot-spot states updated every second.
-
----
-
-## 🛠️ DevOps Handbook
-
-### 1. Infrastructure Requirements
-- **Shared storage (Required)**: FlashBlade or SSD mounted at `/mnt/flashblade` for all pods. All inter-pod communication and **Global Metrics** are file-based on this volume.
-- **Python Runtime**: Python 3.8+ with virtual environment recommended.
-- **Dependencies**: `numpy`, `polars`, `pyarrow`, `xgboost`, `fastapi`, `uvicorn`, `websockets`.
-
-### 2. Launching the System
 ```bash
-# Terminal 1: Start the Backend & Business API
-/home/anuj/Axia/myenv/bin/python backend_server.py
-
-# Terminal 2: Start the entire Pipeline (Generator → Prep → Train → Inference)
-/home/anuj/Axia/myenv/bin/python run_pipeline.py
+make build
 ```
 
-### 3. Testing the Business API
-Wait for the pipeline to start processing (check `pipeline.log`), then run:
+### 2. Load images
+
+**Kind:**
 ```bash
-# Get all business KPIs
+make load-kind
+```
+
+**Minikube** (or Docker Desktop K8s): build directly into cluster Docker:
+```bash
+make load-minikube
+```
+
+### 3. Deploy
+
+```bash
+make deploy
+```
+
+### 4. Port-forward backend and start pipeline
+
+```bash
+make port-forward &
+make start
+```
+
+### 5. Open dashboard
+
+Serve `dashboard-v4-preview.html` with `DASHBOARD_BACKEND_URL=http://localhost:8000`, or open directly if backend is on same host.
+
+### 6. Benchmark
+
+The pipeline itself is the benchmark. Use the dashboard (Business + Tech tabs) or:
+
+```bash
 curl -s http://localhost:8000/api/business/metrics | jq .
+curl -s http://localhost:8000/api/machine/metrics | jq .
+```
 
-# Check specific live metrics
-curl -s http://localhost:8000/api/business/metrics | jq '.risk_signals_by_category'
-curl -s http://localhost:8000/api/business/metrics | jq '.recent_risk_signals'
+### 7. Stop
+
+```bash
+make stop
 ```
 
 ---
 
-## 📡 API Reference
+## Makefile targets
 
-The `backend_server.py` exposes REST APIs for your monitoring stack:
-
-- **Business Intelligence**: `GET /api/business/metrics` (Real-time financial & ML KPIs)
-- **Health Check**: `GET /api/dashboard` (Infrastructure telemetry)
-- **Queue Depth**: `GET /api/backlog/status` (Use for HPA/Autoscaling triggers)
-- **Pressure Alerts**: `GET /api/backlog/pressure`
-- **Real-time Stream**: `ws://localhost:8000/ws/metrics`
-
-*See `API_PAYLOADS.md` for full JSON schemas and payload examples.*
-
----
-
-## 📁 Project Structure
-- `config_contract.py`: Single source of truth for paths and thresholds.
-- `queue_interface.py`: Shared FlashBlade queue with **Metrics Persistence**.
-- `run_pipeline.py`: Orchestrator for local dev/testing.
-- `pods/`: Source code for the 4 pipeline stages.
-- `dashboard-v4-preview.html`: Real-time interactive UI with integrated Business Tab.
+| Target | Description |
+|--------|-------------|
+| `make build` | Build all Docker images |
+| `make build-no-cache` | Build with --no-cache |
+| `make load-kind` | Load images into Kind cluster |
+| `make load-minikube` | Build into Minikube (no Kind needed) |
+| `make deploy` | Apply k8s/fraud-pipeline-all.yaml |
+| `make start` | Start pipeline (scale deployments up) |
+| `make stop` | Stop pipeline (scale to 0) |
+| `make port-forward` | Port-forward backend to localhost:8000 |
+| `make logs` | Tail data-gather logs |
+| `make status` | Show pods in fraud-pipeline namespace |
+| `make restart` | Rollout restart all deployments |
+| `make clean` | Delete fraud-pipeline namespace |
 
 ---
 
-## ✅ Deployment Checklist
-- [ ] Shared volume at `/mnt/flashblade` (with write permissions for metrics/queues).
-- [ ] Model weights present in `run_models_output/` (or run Training pod).
-- [ ] Backend server running to expose the `/api/business/metrics` endpoint.
-- [ ] Threshold `0.52` configured for optimal Business/ML balance.
+## K8s resources
 
-**Developer:** Anuj  
-**Architecture:** Spearhead Non-Blocking Streaming  
-**Target Throughput:** 100k+ Transactions/Sec  
+| Resource | Purpose |
+|----------|---------|
+| Namespace | fraud-pipeline |
+| PVC | fraud-pipeline-flashblade (50Gi) |
+| Deployments | data-gather, preprocessing-cpu, preprocessing-gpu, model-build, inference-cpu, inference-gpu, backend |
+| Services | backend, inference-gpu |
 
+---
+
+## Metrics (Prometheus / Pure1)
+
+Set on backend deployment:
+
+**Local disk:**
+```bash
+kubectl set env deployment/backend -n fraud-pipeline PROMETHEUS_URL=http://prometheus.monitoring:9090
+```
+
+**FlashBlade (Pure1 + FB Prometheus):**
+```bash
+kubectl set env deployment/backend -n fraud-pipeline PURE_SERVER=true PROMETHEUS_URL=http://prometheus.monitoring:9090
+```
+
+---
+
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| ImagePullBackOff | Build locally; use `make load-kind` (Kind) or `make load-minikube` (Minikube) |
+| CrashLoopBackOff | `make build-no-cache` then `make restart` |
+| PVC Pending | Check StorageClass; multi-node needs ReadWriteMany |
+| Metrics API missing | Install metrics-server (Kind/Minikube) |

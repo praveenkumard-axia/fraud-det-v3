@@ -3,8 +3,9 @@ Kubernetes scaling helper for fraud-pipeline namespace.
 Uses subprocess to run kubectl scale. Call this from backend/dashboard when scaling pods.
 """
 
+import json
 import subprocess
-from typing import Tuple
+from typing import Optional, Tuple
 
 NAMESPACE = "fraud-pipeline"
 
@@ -20,6 +21,22 @@ DEPLOYMENT_NAMES = {
     "inference-gpu": "inference-gpu",        # Pod 6
 }
 
+
+def start_pipeline():
+    """
+    Start the pipeline by scaling all deployments to default replicas.
+    """
+    for pod_key, replicas in DEPLOYMENT_NAMES.items():
+        scale_pod(pod_key, replicas)
+    return True, "Pipeline started"
+
+
+def stop_pipeline():
+    """
+    Stop the pipeline by scaling all deployments to 0 replicas.
+    """
+    for pod_key, replicas in DEPLOYMENT_NAMES.items():
+        scale_pod(pod_key, 0)
 
 def scale_pod(pod_key: str, replicas: int) -> Tuple[bool, str]:
     """
@@ -57,6 +74,102 @@ def scale_deployment(deployment_name: str, replicas: int) -> Tuple[bool, str]:
         return False, result.stderr.strip() or result.stdout.strip() or "kubectl failed"
     except subprocess.TimeoutExpired:
         return False, "kubectl scale timed out"
+    except FileNotFoundError:
+        return False, "kubectl not found"
+    except Exception as e:
+        return False, str(e)
+
+
+def _get_pod_name(deployment_name: str) -> Optional[str]:
+    """Get the first running pod name for a deployment."""
+    cmd = [
+        "kubectl", "get", "pods", "-n", NAMESPACE,
+        "-l", f"app={deployment_name}",
+        "-o", "jsonpath={.items[0].metadata.name}",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return None
+
+
+def patch_pod_resources(
+    pod_key: str,
+    cpu_limit: str,
+    memory_limit: str,
+) -> Tuple[bool, str]:
+    """
+    Patch pod resources (CPU/memory limits). Uses In-Place Pod Resize (K8s 1.33+)
+    when available; otherwise falls back to deployment patch (rolling restart).
+    pod_key: one of data-gather, preprocessing-cpu, preprocessing-gpu, model-build, inference-cpu, inference-gpu
+    cpu_limit: e.g. "4000m" or "4"
+    memory_limit: e.g. "4Gi" or "8Gi"
+    Returns (success, message).
+    """
+    deployment_name = DEPLOYMENT_NAMES.get(pod_key)
+    if not deployment_name:
+        return False, f"unknown pod_key: {pod_key}"
+
+    # CPU: "4" = 4 cores (K8s accepts); "4000m" = 4000 millicores. Pass through as-is.
+    # Memory: ensure unit (Gi/Mi)
+    if memory_limit.isdigit():
+        memory_limit = f"{memory_limit}Gi"
+
+    container_name = deployment_name
+    patch_body = {
+        "spec": {
+            "containers": [{
+                "name": container_name,
+                "resources": {
+                    "limits": {"cpu": cpu_limit, "memory": memory_limit},
+                },
+            }],
+        },
+    }
+
+    # Try in-place pod resize first (K8s 1.33+)
+    pod_name = _get_pod_name(deployment_name)
+    if pod_name:
+        cmd = [
+            "kubectl", "patch", "pod", pod_name, "-n", NAMESPACE,
+            "--subresource=resize", "--type=merge",
+            "-p", json.dumps(patch_body),
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode == 0:
+                return True, f"Resized {pod_key} (in-place) CPU={cpu_limit} memory={memory_limit}"
+            # Resize subresource may not exist on older K8s
+            if "subresource" in (result.stderr or "").lower() or "not found" in (result.stderr or "").lower():
+                pass  # Fall through to deployment patch
+            else:
+                return False, result.stderr.strip() or result.stdout.strip() or "kubectl patch failed"
+        except subprocess.TimeoutExpired:
+            return False, "kubectl patch timed out"
+        except FileNotFoundError:
+            return False, "kubectl not found"
+        except Exception as e:
+            return False, str(e)
+
+    # Fallback: patch deployment (triggers rolling restart)
+    cmd = [
+        "kubectl", "patch", "deployment", deployment_name, "-n", NAMESPACE,
+        "--type=json",
+        "-p", json.dumps([
+            {"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/cpu", "value": cpu_limit},
+            {"op": "replace", "path": "/spec/template/spec/containers/0/resources/limits/memory", "value": memory_limit},
+        ]),
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            return True, f"Resized {pod_key} (rolling restart) CPU={cpu_limit} memory={memory_limit}"
+        return False, result.stderr.strip() or result.stdout.strip() or "kubectl patch failed"
+    except subprocess.TimeoutExpired:
+        return False, "kubectl patch timed out"
     except FileNotFoundError:
         return False, "kubectl not found"
     except Exception as e:

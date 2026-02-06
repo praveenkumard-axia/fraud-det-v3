@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """
 Dashboard metrics collector: 1s polling.
-Aggregates K8s utilization, queue/telemetry, and business metrics into a structured JSON
-written to a file. WebSocket server reads this file and emits to clients.
+Aggregates K8s utilization, queue/telemetry, Prometheus, and Pure1 metrics
+into a structured JSON written to a file. WebSocket server reads this file and emits to clients.
+
+Prometheus: set PROMETHEUS_URL for storage throughput, utilization, latency.
+Pure1: set PURE1_API_TOKEN + PURE1_ARRAY_ID for FlashBlade current_bw/max_bw.
+Local: when neither is available, uses psutil for local SSD/HDD (LOCAL_DISK_MAX_MBPS).
 """
 
 import json
@@ -10,6 +14,24 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+
+try:
+    from prometheus_metrics import fetch_prometheus_metrics
+except ImportError:
+    def fetch_prometheus_metrics() -> Dict[str, Any]:
+        return {}
+
+try:
+    from pure1_metrics import fetch_flashblade_util
+except ImportError:
+    def fetch_flashblade_util() -> Dict[str, Any]:
+        return {}
+
+try:
+    from local_disk_metrics import fetch_local_disk_metrics
+except ImportError:
+    def fetch_local_disk_metrics() -> Dict[str, Any]:
+        return {}
 
 # Default path for the metrics JSON (read by WebSocket every 1.2s)
 METRICS_JSON_PATH = Path(__file__).parent / "run_data_output" / "dashboard_metrics.json"
@@ -68,9 +90,38 @@ def collect_metrics(
     cpu_throughput = telemetry.get("throughput", 0)  # txns/s from telemetry
     cpu_point = {"t": round(ts, 1), "util_millicores": cpu_util, "throughput": cpu_throughput}
 
-    # GPU / FB: stub (plug Prometheus or dcgm later)
+    # Prometheus: storage throughput, utilization, latency (when available)
+    prom = fetch_prometheus_metrics()
+    storage_read = prom.get("storage_read_mbps") or prom.get("fb_read_mbps")
+    storage_write = prom.get("storage_write_mbps") or prom.get("fb_write_mbps")
+    storage_util = prom.get("storage_util_pct")
+    latency_ms = prom.get("latency_ms")
+
+    # Pure1: FlashBlade current_bw / max_bw (only when PURE_SERVER=true)
+    pure1 = {}
+    try:
+        from config_contract import get_env, EnvironmentVariables
+        if get_env(EnvironmentVariables.PURE_SERVER, "false").lower() in ("true", "1", "yes"):
+            pure1 = fetch_flashblade_util()
+    except ImportError:
+        pass
+
+    # Local disk (SSD/HDD): fallback when no Prometheus/Pure1
+    local = fetch_local_disk_metrics() if (storage_read is None and storage_write is None) else {}
+
+    fb_util_pct = pure1.get("util_pct") if pure1 else (storage_util or local.get("storage_util_pct", 0))
+    fb_read_mbps = storage_read if storage_read is not None else local.get("storage_read_mbps", 0.0)
+    fb_write_mbps = storage_write if storage_write is not None else local.get("storage_write_mbps", 0.0)
+
+    # GPU / FB
     gpu_point = {"t": round(ts, 1), "util": 0, "throughput": 0}
-    fb_point = {"t": round(ts, 1), "util": 0, "throughput_mbps": 0.0}
+    fb_point = {
+        "t": round(ts, 1),
+        "util": fb_util_pct,
+        "throughput_mbps": round(float(fb_read_mbps) + float(fb_write_mbps), 2),
+        "read_mbps": round(float(fb_read_mbps), 2),
+        "write_mbps": round(float(fb_write_mbps), 2),
+    }
 
     # Business from telemetry + queue
     generated = telemetry.get("generated", 0)
@@ -121,7 +172,7 @@ def collect_metrics(
         "1_fraud_exposure_identified_usd": round(flagged_amt_approx, 2),  # SUM(amt) WHERE risk_score >= 75
         "2_transactions_analyzed": txns_scored,  # COUNT(*)
         "3_high_risk_flagged": fraud_blocked,  # COUNT(*) WHERE risk_score >= 75
-        "4_decision_latency_ms": 12.0,  # AVG(t_output - t_input); placeholder until pipeline timestamps
+        "4_decision_latency_ms": round(latency_ms, 2) if latency_ms is not None else 12.0,  # Prometheus or placeholder
         "5_precision_at_threshold": round(tp / max(1, tp + fp), 4) if (tp + fp) else 0,  # TP/(TP+FP)
         "6_fraud_rate_pct": round(100 * flagged_amt_approx / total_amt_approx, 4) if total_amt_approx else 0,  # SUM(amt flagged)/SUM(amt total)
         "7_alerts_per_1m": round((fraud_blocked / max(1, txns_scored)) * 1e6, 0) if txns_scored else 0,
@@ -138,13 +189,22 @@ def collect_metrics(
         "14_state_risk": {},  # SUM(amt flagged) GROUP BY state; fill when pipeline publishes
         "15_recall": round(tp / max(1, tp + fn), 4) if (tp + fn) else 0,  # TP/(TP+FN)
         "16_false_positive_rate": round(fp / max(1, fp + tn), 4) if (fp + tn) else 0,  # FP/(FP+TN)
-        "17_flashblade_util_pct": fb_point.get("util", 0),  # current_bw/max_bw; plug Pure1 API
+        "17_flashblade_util_pct": fb_point.get("util", 0),  # current_bw/max_bw from Pure1 or Prometheus
+    }
+
+    # Storage metrics (Prometheus / Pure1) for JSON consumers
+    storage_metrics = {
+        "throughput_read_mbps": round(float(fb_point.get("read_mbps", 0)), 2),
+        "throughput_write_mbps": round(float(fb_point.get("write_mbps", 0)), 2),
+        "utilization_pct": fb_point.get("util", 0),
+        "latency_ms": round(latency_ms, 2) if latency_ms is not None else None,
     }
 
     payload = {
         "cpu": [cpu_point],
         "gpu": [gpu_point],
         "fb": [fb_point],
+        "storage": storage_metrics,
         "kpis": kpis,
         "business": {
             "no_of_generated": generated,

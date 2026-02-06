@@ -1,0 +1,48 @@
+# Fraud Detection Pipeline - Makefile
+# Run from repo root: make <target>
+
+NAMESPACE := fraud-pipeline
+MANIFEST := k8s/fraud-pipeline-all.yaml
+IMAGES := fraud-pipeline/data-gather:latest fraud-pipeline/preprocessing-cpu:latest fraud-pipeline/preprocessing-gpu:latest fraud-pipeline/inference-cpu:latest fraud-pipeline/inference-gpu:latest fraud-pipeline/model-build:latest fraud-pipeline/backend:latest
+BACKEND_URL ?= http://localhost:8000
+
+.PHONY: build build-no-cache load-kind load-minikube deploy start stop port-forward logs status restart clean
+
+build:
+	chmod +x k8s/build-images.sh
+	./k8s/build-images.sh
+
+build-no-cache:
+	NO_CACHE=--no-cache ./k8s/build-images.sh
+
+# Kind: load built images into cluster
+load-kind:
+	kind load docker-image $(IMAGES)
+
+# Minikube: build images directly into Minikube's Docker (no separate load step)
+load-minikube:
+	eval $$(minikube docker-env) && $(MAKE) build
+
+deploy:
+	kubectl apply -f $(MANIFEST)
+
+start:
+	curl -s -X POST $(BACKEND_URL)/api/control/start
+
+stop:
+	curl -s -X POST $(BACKEND_URL)/api/control/stop
+
+port-forward:
+	kubectl port-forward -n $(NAMESPACE) svc/backend 8000:8000
+
+logs:
+	kubectl logs -n $(NAMESPACE) deployment/data-gather --tail=50 -f
+
+status:
+	kubectl get pods -n $(NAMESPACE) -w
+
+restart:
+	kubectl rollout restart deployment -n $(NAMESPACE) --all
+
+clean:
+	kubectl delete namespace $(NAMESPACE) --ignore-not-found

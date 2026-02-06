@@ -23,7 +23,7 @@ import uvicorn
 
 # Import queue and config modules
 from queue_interface import get_queue_service
-from k8s_scale import scale_pod
+from k8s_scale import scale_pod, patch_pod_resources
 from metrics_collector import run_one_poll, METRICS_JSON_PATH
 from config_contract import (
     QueueTopics, StoragePaths, ScalingConfig, BacklogThresholds,
@@ -63,6 +63,11 @@ class ScaleConfig(BaseModel):
     training_pods: int = 1
     inference_pods: int = 2
     generation_rate: int = 50000
+
+
+class ResourcePatchRequest(BaseModel):
+    cpu_limit: str
+    memory_limit: str
 
 
 class PipelineState:
@@ -645,6 +650,81 @@ async def scale_inference_gpu(request: ScaleRequest):
     }
 
 
+# ==================== Resource Allocation (CPU/Memory scaling) ====================
+
+def _get_resource_bounds() -> dict:
+    """Auto-detect min/max CPU and memory from K8s node or local system."""
+    cpu_min, cpu_max = 1, 8
+    mem_min_gb, mem_max_gb = 1, 8
+    swap_min_gb, swap_max_gb = 0, 4
+
+    # Try K8s node allocatable first
+    try:
+        # Get CPU (cores, may be "8" or "8000m")
+        cmd_cpu = ["kubectl", "get", "nodes", "-o", "jsonpath={.items[0].status.allocatable.cpu}"]
+        res_cpu = subprocess.run(cmd_cpu, capture_output=True, text=True, timeout=10)
+        if res_cpu.returncode == 0 and res_cpu.stdout.strip():
+            cv = res_cpu.stdout.strip()
+            if cv.endswith("m"):
+                cpu_max = max(cpu_max, int(cv[:-1]) // 1000 or 1)
+            else:
+                cpu_max = max(cpu_max, int(cv) if cv.isdigit() else cpu_max)
+        # Get memory (e.g. "32Gi" or "32768Ki")
+        cmd_mem = ["kubectl", "get", "nodes", "-o", "jsonpath={.items[0].status.allocatable.memory}"]
+        res_mem = subprocess.run(cmd_mem, capture_output=True, text=True, timeout=10)
+        if res_mem.returncode == 0 and res_mem.stdout.strip():
+            mv = res_mem.stdout.strip()
+            m = re.match(r"^(\d+)([KMGT]i?)?$", mv, re.I)
+            if m:
+                val = int(m.group(1))
+                unit = (m.group(2) or "Ki").lower()
+                if "gi" in unit:
+                    mem_max_gb = max(mem_max_gb, val)
+                elif "mi" in unit:
+                    mem_max_gb = max(mem_max_gb, val // 1024 or 1)
+                elif "ki" in unit:
+                    mem_max_gb = max(mem_max_gb, val // (1024 * 1024) or 1)
+    except Exception:
+        pass
+
+    # Fallback: local system (psutil or os)
+    if cpu_max <= 1 or mem_max_gb <= 1:
+        try:
+            import psutil
+            cpu_max = max(cpu_max, psutil.cpu_count() or 8)
+            mem_total = psutil.virtual_memory().total
+            mem_max_gb = max(mem_max_gb, mem_total // (1024**3))
+        except ImportError:
+            cpu_max = max(cpu_max, os.cpu_count() or 8)
+
+    return {
+        "cpu_min": cpu_min,
+        "cpu_max": cpu_max,
+        "memory_min_gb": mem_min_gb,
+        "memory_max_gb": mem_max_gb,
+        "swap_min_gb": swap_min_gb,
+        "swap_max_gb": swap_max_gb,
+    }
+
+
+@app.get("/api/resources/bounds")
+async def get_resource_bounds():
+    """Get auto-detected min/max for resource sliders."""
+    return _get_resource_bounds()
+
+
+@app.patch("/api/resources/{pod_key}")
+async def patch_resources(pod_key: str, request: ResourcePatchRequest):
+    """Patch pod CPU/memory limits (in-place resize when K8s supports it)."""
+    from k8s_scale import DEPLOYMENT_NAMES
+    if pod_key not in DEPLOYMENT_NAMES:
+        return {"success": False, "error": f"unknown pod_key: {pod_key}"}
+    ok, msg = patch_pod_resources(pod_key, request.cpu_limit, request.memory_limit)
+    if not ok:
+        return {"success": False, "error": msg}
+    return {"success": True, "message": msg}
+
+
 @app.post("/api/control/priority")
 async def set_priority(request: PriorityRequest):
     """Set system priority: inference or training"""
@@ -1034,6 +1114,76 @@ async def get_business_metrics():
         }
     }
 
+
+@app.get("/api/machine/metrics")
+async def get_machine_metrics():
+    """
+    Machine metrics: throughput (cpu, gpu, fb), storage read/write from Prometheus
+    (FlashBlade or local disk via node_exporter), and Model data from /api/business/metrics.
+    """
+    try:
+        from prometheus_metrics import fetch_prometheus_metrics
+    except ImportError:
+        def fetch_prometheus_metrics():
+            return {}
+
+    # Prometheus: storage read/write (FB or local disk); fallback to dashboard_metrics.json if empty
+    prom = fetch_prometheus_metrics()
+    fb_read = prom.get("fb_read_mbps") or prom.get("storage_read_mbps")
+    fb_write = prom.get("fb_write_mbps") or prom.get("storage_write_mbps")
+    fb_throughput = None
+    if fb_read is not None and fb_write is not None:
+        fb_throughput = round(float(fb_read) + float(fb_write), 2)
+    elif fb_read is not None:
+        fb_throughput = round(float(fb_read), 2)
+    elif fb_write is not None:
+        fb_throughput = round(float(fb_write), 2)
+
+    # Throughput and FlashBlade fallback: from dashboard_metrics.json or state.telemetry
+    cpu_throughput = 0
+    gpu_throughput = 0
+    if METRICS_JSON_PATH.exists():
+        try:
+            with open(METRICS_JSON_PATH, "r") as f:
+                dm = json.load(f)
+            cpu_list = dm.get("cpu", [])
+            gpu_list = dm.get("gpu", [])
+            fb_list = dm.get("fb", [])
+            if cpu_list:
+                cpu_throughput = cpu_list[-1].get("throughput", 0) or 0
+            if gpu_list:
+                gpu_throughput = gpu_list[-1].get("throughput", 0) or 0
+            if fb_list:
+                last_fb = fb_list[-1]
+                if fb_throughput is None:
+                    fb_throughput = last_fb.get("throughput_mbps", 0) or 0
+                if fb_read is None:
+                    fb_read = last_fb.get("read_mbps", 0) or 0
+                if fb_write is None:
+                    fb_write = last_fb.get("write_mbps", 0) or 0
+        except Exception:
+            pass
+    if cpu_throughput == 0:
+        with state.lock:
+            cpu_throughput = state.telemetry.get("throughput", 0) or 0
+    if fb_throughput is None:
+        fb_throughput = 0
+
+    # Model: full response from get_business_metrics
+    model_data = await get_business_metrics()
+
+    return {
+        "throughput": {
+            "cpu": cpu_throughput,
+            "gpu": gpu_throughput,
+            "fb": fb_throughput,
+        },
+        "FlashBlade": {
+            "read": f"{(fb_read or 0):.1f}MB/s",
+            "write": f"{(fb_write or 0):.1f}MB/s",
+        },
+        "Model": model_data,
+    }
 
 
 async def websocket_metrics(websocket: WebSocket):

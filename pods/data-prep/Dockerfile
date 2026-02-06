@@ -9,7 +9,9 @@ ENV DASK_DISTRIBUTED__LOGGING__DISTRIBUTED=critical
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
-COPY prepare.py .
+
+COPY queue_interface.py config_contract.py ./
+COPY pods/data-prep/prepare.py ./
 
 ENV INPUT_DIR=/data/input
 ENV OUTPUT_DIR=/data/output

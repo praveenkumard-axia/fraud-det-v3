@@ -101,27 +101,27 @@ class ScalingConfig:
         },
         "preprocessing": {
             "min_replicas": 1,
-            "max_replicas": 10,
+            "max_replicas": 1,
             "default_replicas": 1
         },
         "training": {
             "min_replicas": 0,  # Can be 0 when not training
-            "max_replicas": 2,
+            "max_replicas": 1,
             "default_replicas": 1
         },
         "inference": {
             "min_replicas": 1,
-            "max_replicas": 20,
-            "default_replicas": 2
+            "max_replicas": 1,
+            "default_replicas": 1
         },
         "preprocessing-gpu": {
             "min_replicas": 0,
-            "max_replicas": 4,
+            "max_replicas": 1,
             "default_replicas": 0
         },
         "inference-gpu": {
             "min_replicas": 0,
-            "max_replicas": 8,
+            "max_replicas": 1,
             "default_replicas": 0
         }
     }
@@ -137,7 +137,7 @@ class BacklogThresholds:
     
     THRESHOLDS = {
         QueueTopics.RAW_TRANSACTIONS: {
-            "warning": 1500000,      # Increase for 1M trigger demo
+            "warning": 1500000,     
             "critical": 3000000,
             "action": "throttle_generation"
         },
@@ -168,12 +168,12 @@ class SystemPriorities:
 
 class GenerationRateLimits:
     """
-    Data generation rate limits
+    Data generation rate limits all values are row/sec
     """
     
-    MIN_RATE = 1000      # rows/sec
-    MAX_RATE = 100000    # rows/sec
-    DEFAULT_RATE = 50000 # rows/sec
+    MIN_RATE = 1000     
+    MAX_RATE = 100000   
+    DEFAULT_RATE = 50000
 
 
 class MetricsConfig:
@@ -221,7 +221,21 @@ class EnvironmentVariables:
     # System configuration
     SYSTEM_PRIORITY = "SYSTEM_PRIORITY"
     ENABLE_METRICS = "ENABLE_METRICS"
-    
+
+    # Prometheus metrics (1s polling -> JSON)
+    PROMETHEUS_URL = "PROMETHEUS_URL"
+    PROMETHEUS_READ_THROUGHPUT_QUERY = "PROMETHEUS_READ_THROUGHPUT_QUERY"
+    PROMETHEUS_WRITE_THROUGHPUT_QUERY = "PROMETHEUS_WRITE_THROUGHPUT_QUERY"
+    PROMETHEUS_UTIL_QUERY = "PROMETHEUS_UTIL_QUERY"
+    PROMETHEUS_LATENCY_QUERY = "PROMETHEUS_LATENCY_QUERY"
+
+    # Pure1 API (FlashBlade current_bw / max_bw)
+    PURE1_API_TOKEN = "PURE1_API_TOKEN"
+    PURE1_ARRAY_ID = "PURE1_ARRAY_ID"
+
+    # Pure Storage / FlashBlade mode: when "true", enables Pure1 and FB-specific Prometheus metrics
+    PURE_SERVER = "PURE_SERVER"
+
     # Defaults
     DEFAULTS = {
         FLASHBLADE_ENABLED: "false",
@@ -232,7 +246,8 @@ class EnvironmentVariables:
         GENERATION_RATE: str(GenerationRateLimits.DEFAULT_RATE),
         BATCH_SIZE: "50000",
         SYSTEM_PRIORITY: SystemPriorities.BALANCED,
-        ENABLE_METRICS: "true"
+        ENABLE_METRICS: "true",
+        PURE_SERVER: "false"  # set "true" to enable Pure1 + FlashBlade metrics
     }
 
 

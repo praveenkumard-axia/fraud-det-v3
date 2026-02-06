@@ -7,7 +7,8 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir xgboost>=2.0.0
 
-COPY train.py .
+COPY queue_interface.py config_contract.py ./
+COPY pods/model-build/train.py ./
 
 ENV PREP_OUTPUT_DIR=/data/input
 ENV FA_MOUNT=/data/models

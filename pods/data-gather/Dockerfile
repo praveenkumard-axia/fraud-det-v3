@@ -10,7 +10,8 @@ RUN pip install --no-cache-dir \
     pyarrow>=14.0.0 \
     faker>=22.0.0
 
-COPY gather.py .
+COPY queue_interface.py config_contract.py ./
+COPY pods/data-gather/gather.py ./
 
 ENV OUTPUT_DIR=/data/output
 ENV NUM_WORKERS=128

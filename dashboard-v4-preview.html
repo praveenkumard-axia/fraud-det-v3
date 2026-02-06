@@ -278,26 +278,26 @@
       <!-- Business KPI Row -->
       <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 16px;">
         <div class="metric-hero" style="padding: 16px;">
-          <div class="metric-value" style="font-size: 26px;">$247,892</div>
+          <div class="metric-value" id="kpi-fraud-exposure" style="font-size: 26px;">$0</div>
           <div class="metric-label">Fraud Exposure Identified</div>
         </div>
         <div class="metric-box">
-          <div class="metric-value" style="color: var(--amber);">0.58%</div>
+          <div class="metric-value" id="kpi-fraud-rate" style="color: var(--amber);">0%</div>
           <div class="metric-label">Fraud Rate ($ Flagged / $ Total)</div>
-          <div class="metric-change" style="color: var(--red);">▲ 0.03% vs prior hour</div>
+          <div class="metric-change" style="color: var(--text-muted);">—</div>
         </div>
         <div class="metric-box">
-          <div class="metric-value" style="color: var(--cyan);">1,946</div>
+          <div class="metric-value" id="kpi-alerts" style="color: var(--cyan);">0</div>
           <div class="metric-label">Alerts per 1M Txns</div>
-          <div class="metric-change" style="color: var(--text-muted);">▬ Stable</div>
+          <div class="metric-change" style="color: var(--text-muted);">—</div>
         </div>
         <div class="metric-box">
-          <div class="metric-value">0.19%</div>
+          <div class="metric-value" id="kpi-high-risk-rate">0%</div>
           <div class="metric-label">High-Risk Txn Rate</div>
-          <div class="metric-change" style="color: var(--green);">▼ 0.02% improving</div>
+          <div class="metric-change" style="color: var(--text-muted);">—</div>
         </div>
         <div class="metric-box">
-          <div class="metric-value" style="color: var(--green);">$128M</div>
+          <div class="metric-value" id="kpi-annual-savings" style="color: var(--green);">$0</div>
           <div class="metric-label">Projected Annual Savings</div>
           <div class="metric-change" style="color: var(--text-muted);">at current detection rate</div>
         </div>
@@ -312,9 +312,9 @@
           <div class="card">
             <div class="card-header">
               <span class="card-title">Risk Score Distribution</span>
-              <span class="card-badge" style="background: var(--blue-dim); color: var(--blue);">6.6M txns scored</span>
+              <span class="card-badge" id="dist-badge" style="background: var(--blue-dim); color: var(--blue);">0 txns scored</span>
             </div>
-            <div class="dist-chart">
+            <div class="dist-chart" id="dist-chart">
               <!-- 20 bins from 0-100 risk score -->
               <div class="dist-bar" style="height: 95%; background: var(--green);"></div>
               <div class="dist-bar" style="height: 88%; background: var(--green);"></div>
@@ -411,6 +411,7 @@
               <span class="card-title">Risk Signals by Transaction Category</span>
               <span class="card-badge" style="background: var(--orange-dim); color: var(--orange);">from dataset categories</span>
             </div>
+            <div id="category-container">
             <div class="bar-row">
               <div class="bar-label">shopping_net</div>
               <div class="bar-track"><div class="bar-fill" style="width: 82%; background: linear-gradient(90deg, var(--red), #f97316);"></div></div>
@@ -451,6 +452,7 @@
               <div class="bar-track"><div class="bar-fill" style="width: 12%; background: linear-gradient(90deg, rgba(100,116,139,0.2), rgba(100,116,139,0.5));"></div></div>
               <div class="bar-val">$10,242</div>
             </div>
+            </div>
           </div>
           
           <!-- Recent Risk Signals -->
@@ -459,6 +461,7 @@
               <span class="card-title">Recent Risk Signals</span>
               <span class="card-badge" style="background: var(--purple-dim); color: var(--purple);">Last 60s</span>
             </div>
+            <div id="recent-signals-container">
             <div class="alert-item high">
               <div class="alert-risk" style="color: var(--red);">97.8</div>
               <div class="alert-details">
@@ -499,6 +502,7 @@
               </div>
               <div class="alert-amount">$178.94</div>
             </div>
+            </div>
           </div>
           
         </div>
@@ -510,19 +514,19 @@
           <div class="card">
             <div class="card-header">
               <span class="card-title">Model Decisioning</span>
-              <span class="card-badge" style="background: var(--green-dim); color: var(--green);">Threshold: 75</span>
+              <span class="card-badge" id="ml-threshold-badge" style="background: var(--green-dim); color: var(--green);">Threshold: 52%</span>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px;">
               <div style="text-align: center;">
-                <div style="font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--green);">94.2%</div>
+                <div id="ml-precision" style="font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--green);">—</div>
                 <div style="font-size: 10px; color: var(--text-muted);">Precision</div>
               </div>
               <div style="text-align: center;">
-                <div style="font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--blue);">89.7%</div>
+                <div id="ml-recall" style="font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--blue);">—</div>
                 <div style="font-size: 10px; color: var(--text-muted);">Recall</div>
               </div>
               <div style="text-align: center;">
-                <div style="font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--green);">0.02%</div>
+                <div id="ml-fpr" style="font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--green);">—</div>
                 <div style="font-size: 10px; color: var(--text-muted);">False Positive</div>
               </div>
             </div>
@@ -539,15 +543,15 @@
             <div class="card-header">
               <span class="card-title">Risk Concentration</span>
             </div>
-            <div class="insight-box" style="margin-bottom: 10px;">
+            <div class="insight-box" id="concentration-top" style="margin-bottom: 10px;">
               <div class="insight-label">Executive Insight</div>
-              <div class="insight-value">Top 1% → 68% of risk $</div>
-              <div class="insight-desc">12,847 transactions account for $168,567 of identified fraud exposure</div>
+              <div class="insight-value">—</div>
+              <div class="insight-desc">Waiting for data...</div>
             </div>
-            <div class="insight-box" style="border-left-color: var(--amber);">
+            <div class="insight-box" id="concentration-pattern" style="border-left-color: var(--amber);">
               <div class="insight-label" style="color: var(--amber);">Pattern Alert</div>
-              <div class="insight-value" style="font-size: 16px;">shopping_net + misc_net</div>
-              <div class="insight-desc">Together represent 44% of all high-risk flagged volume — up 12% this session</div>
+              <div class="insight-value" style="font-size: 16px;">—</div>
+              <div class="insight-desc">—</div>
             </div>
           </div>
           
@@ -557,6 +561,7 @@
               <span class="card-title">Risk Exposure by State</span>
               <span class="card-badge" style="background: var(--bg-card); color: var(--text-muted);">Top 8</span>
             </div>
+            <div id="state-risk-container">
             <div class="state-row">
               <div class="state-name"><span class="state-rank">1</span> Texas</div>
               <div class="state-val" style="color: var(--red);">$38,420</div>
@@ -588,6 +593,7 @@
             <div class="state-row">
               <div class="state-name"><span class="state-rank">8</span> Georgia</div>
               <div class="state-val">$12,440</div>
+            </div>
             </div>
           </div>
           
@@ -804,6 +810,45 @@
         <!-- ── RIGHT COLUMN ── -->
         <div class="col-4 stack">
           
+          <!-- Machine Metrics (Prometheus) -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Machine Metrics</span>
+              <span class="card-badge" style="background: var(--purple-dim); color: var(--purple);">Prometheus</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+              <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
+                <div style="font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--blue);" id="mm-cpu">0</div>
+                <div style="font-size: 10px; color: var(--text-muted);">CPU txns/s</div>
+              </div>
+              <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
+                <div style="font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--green);" id="mm-gpu">0</div>
+                <div style="font-size: 10px; color: var(--text-muted);">GPU txns/s</div>
+              </div>
+              <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
+                <div style="font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--orange);" id="mm-fb">0</div>
+                <div style="font-size: 10px; color: var(--text-muted);">FB MB/s</div>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+              <div style="background: var(--bg-card); border-radius: 4px; padding: 8px; text-align: center;">
+                <div style="font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--blue);" id="mm-fb-read">0MB/s</div>
+                <div style="font-size: 9px; color: var(--text-muted);">FlashBlade Read</div>
+              </div>
+              <div style="background: var(--bg-card); border-radius: 4px; padding: 8px; text-align: center;">
+                <div style="font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--green);" id="mm-fb-write">0MB/s</div>
+                <div style="font-size: 9px; color: var(--text-muted);">FlashBlade Write</div>
+              </div>
+            </div>
+            <div class="sep"></div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Model (from /api/business/metrics)</div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+              <span style="font-size: 10px;">Prec: <span id="mm-model-precision" style="font-family: var(--mono); font-weight: 600;">—</span></span>
+              <span style="font-size: 10px;">Recall: <span id="mm-model-recall" style="font-family: var(--mono); font-weight: 600;">—</span></span>
+              <span style="font-size: 10px;">Fraud $: <span id="mm-model-fraud" style="font-family: var(--mono); font-weight: 600;">—</span></span>
+            </div>
+          </div>
+          
           <!-- Model Performance -->
           <div class="card">
             <div class="card-header">
@@ -899,6 +944,33 @@
               <span class="scale-count" id="generator-speed-val">10K</span>
             </div>
           </div>
+
+          <!-- Resource Allocation -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Resource Allocation</span>
+            </div>
+            <div style="margin-bottom: 10px;">
+              <label style="font-size: 11px; color: var(--text-muted);">Pod</label>
+              <select id="resource-pod-select" style="width: 100%; padding: 8px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 12px;">
+                <option value="data-gather">data-gather</option>
+                <option value="preprocessing-cpu">preprocessing-cpu</option>
+                <option value="preprocessing-gpu">preprocessing-gpu</option>
+                <option value="model-build">model-build</option>
+                <option value="inference-cpu">inference-cpu</option>
+                <option value="inference-gpu">inference-gpu</option>
+              </select>
+            </div>
+            <div style="margin-bottom: 12px;">
+              <div class="progress-label"><span>CPU limit</span><span id="resource-cpu-val" style="font-family: var(--mono);">4</span></div>
+              <input type="range" id="resource-cpu" min="1" max="8" value="4" step="1">
+            </div>
+            <div style="margin-bottom: 12px;">
+              <div class="progress-label"><span>Memory Limit</span><span id="resource-mem-val" style="font-family: var(--mono);">8 GB</span></div>
+              <input type="range" id="resource-mem" min="1" max="8" value="8" step="1">
+            </div>
+            <div id="resource-toast" style="font-size: 11px; min-height: 18px;"></div>
+          </div>
           
           <!-- Controls -->
           <div class="btn-row">
@@ -931,9 +1003,13 @@
       if (tab === 'business') {
         document.querySelectorAll('.tab')[0].classList.add('active');
         document.getElementById('tab-business').classList.add('active');
+        startBusinessPoll();
+        stopMachinePoll();
       } else {
         document.querySelectorAll('.tab')[1].classList.add('active');
         document.getElementById('tab-tech').classList.add('active');
+        stopBusinessPoll();
+        startMachinePoll();
       }
     }
 
@@ -952,9 +1028,18 @@
     let ws = null;
 
     function fmtNum(n) {
+      if (n == null || isNaN(n)) return '0';
+      n = Number(n);
       if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
       if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-      return String(n);
+      return String(Math.round(n));
+    }
+    function fmtUsd(n) {
+      if (n == null || isNaN(n)) return '$0';
+      n = Number(n);
+      if (n >= 1e6) return '$' + (n / 1e6).toFixed(0) + 'M';
+      if (n >= 1e3) return '$' + (n / 1e3).toFixed(0) + 'K';
+      return '$' + n.toFixed(0);
     }
     function fmtElapsed(sec) {
       const m = Math.floor(sec / 60);
@@ -1021,10 +1106,145 @@
 
       const fb = (data.fb && data.fb.length) ? data.fb[data.fb.length - 1] : {};
       const fbUtil = fb.util || 0;
-      if (document.getElementById('fb-read')) document.getElementById('fb-read').textContent = (fb.throughput_mbps || 0).toFixed(1) + ' MB/s';
-      if (document.getElementById('fb-write')) document.getElementById('fb-write').textContent = (fb.throughput_mbps || 0).toFixed(1) + ' MB/s';
+      if (document.getElementById('fb-read')) document.getElementById('fb-read').textContent = (fb.read_mbps ?? fb.throughput_mbps ?? 0).toFixed(1) + ' MB/s';
+      if (document.getElementById('fb-write')) document.getElementById('fb-write').textContent = (fb.write_mbps ?? fb.throughput_mbps ?? 0).toFixed(1) + ' MB/s';
       if (document.getElementById('fb-util')) document.getElementById('fb-util').textContent = fbUtil + '%';
       if (document.getElementById('fb-util-bar')) document.getElementById('fb-util-bar').style.width = Math.min(100, fbUtil) + '%';
+    }
+
+    function updateBusinessMetrics(b) {
+      if (!b) return;
+      const el = (id) => document.getElementById(id);
+      if (el('kpi-fraud-exposure')) el('kpi-fraud-exposure').textContent = fmtUsd(b.fraud_exposure_identified);
+      if (el('kpi-fraud-rate')) el('kpi-fraud-rate').textContent = (Number(b.fraud_rate || 0) * 100).toFixed(2) + '%';
+      if (el('kpi-alerts')) el('kpi-alerts').textContent = fmtNum(b.alerts_per_million || 0);
+      if (el('kpi-high-risk-rate')) el('kpi-high-risk-rate').textContent = (Number(b.high_risk_txn_rate || 0) * 100).toFixed(2) + '%';
+      if (el('kpi-annual-savings')) el('kpi-annual-savings').textContent = fmtUsd(b.projected_annual_savings);
+
+      const dist = b.risk_score_distribution || [];
+      const distEl = el('dist-chart');
+      if (distEl && dist.length) {
+        const maxCount = Math.max(1, ...dist.map(d => d.count || 0));
+        distEl.innerHTML = dist.slice(0, 20).map(d => {
+          const pct = Math.min(100, ((d.count || 0) / maxCount) * 100);
+          const binEnd = parseFloat((d.bin || '0').split('-')[1]) || 0.05;
+          const isHigh = binEnd >= 0.9;
+          const isMed = binEnd >= 0.6 && binEnd < 0.9;
+          const bg = isHigh ? 'var(--red)' : isMed ? 'var(--amber)' : 'var(--green)';
+          return `<div class="dist-bar" style="height: ${pct}%; background: ${bg};"></div>`;
+        }).join('');
+      }
+      if (el('dist-badge')) el('dist-badge').textContent = fmtNum(b.transactions_analyzed || 0) + ' txns scored';
+
+      const ml = b.ml_details || {};
+      if (el('ml-precision')) el('ml-precision').textContent = ml.precision != null ? (ml.precision * 100).toFixed(1) + '%' : '—';
+      if (el('ml-recall')) el('ml-recall').textContent = ml.recall != null ? (ml.recall * 100).toFixed(1) + '%' : '—';
+      if (el('ml-fpr')) el('ml-fpr').textContent = ml.false_positive_rate != null ? (ml.false_positive_rate * 100).toFixed(2) + '%' : '—';
+      if (el('ml-threshold-badge')) el('ml-threshold-badge').textContent = 'Threshold: ' + (ml.threshold != null ? (ml.threshold * 100) + '%' : '—');
+
+      const conc = b.risk_concentration || {};
+      if (el('concentration-top')) {
+        const top = conc.top_1_percent_txns ?? 0;
+        const amt = conc.top_1_percent_fraud_amount ?? 0;
+        const pct = conc.concentration_percentage ?? 0;
+        el('concentration-top').querySelector('.insight-value').textContent = top ? `Top 1% → ${pct.toFixed(0)}% of risk $` : '—';
+        el('concentration-top').querySelector('.insight-desc').textContent = top ? `${fmtNum(top)} transactions account for ${fmtUsd(amt)} of identified fraud exposure` : 'Waiting for data...';
+      }
+      if (el('concentration-pattern')) {
+        el('concentration-pattern').querySelector('.insight-value').textContent = conc.pattern_alert || '—';
+        el('concentration-pattern').querySelector('.insight-desc').textContent = conc.pattern_alert ? 'Pattern from category risk' : '—';
+      }
+
+      const states = b.state_risk || [];
+      const stateEl = el('state-risk-container');
+      if (stateEl) {
+        const stateNames = { TX: 'Texas', CA: 'California', NY: 'New York', FL: 'Florida', IL: 'Illinois', PA: 'Pennsylvania', OH: 'Ohio', GA: 'Georgia' };
+        stateEl.innerHTML = states.slice(0, 8).map(s => `
+          <div class="state-row">
+            <div class="state-name"><span class="state-rank">${s.rank || 0}</span> ${stateNames[s.state] || s.state}</div>
+            <div class="state-val" style="color: var(--red);">${fmtUsd(s.fraud_amount || 0)}</div>
+          </div>
+        `).join('') || '<div class="state-row"><div class="state-name">No data</div><div class="state-val">—</div></div>';
+      }
+
+      const cats = b.risk_signals_by_category || [];
+      const catEl = el('category-container');
+      if (catEl && Array.isArray(cats)) {
+        const maxAmt = Math.max(1, ...cats.map(c => c.amount || 0));
+        catEl.innerHTML = cats.slice(0, 10).map(c => {
+          const pct = Math.min(100, ((c.amount || 0) / maxAmt) * 100);
+          const color = pct > 60 ? 'var(--red)' : pct > 30 ? 'var(--amber)' : 'var(--blue)';
+          return `<div class="bar-row">
+            <div class="bar-label">${(c.category || '').replace(/_/g, ' ')}</div>
+            <div class="bar-track"><div class="bar-fill" style="width: ${pct}%; background: linear-gradient(90deg, ${color}, ${color});"></div></div>
+            <div class="bar-val" style="color: ${color};">${fmtUsd(c.amount || 0)}</div>
+          </div>`;
+        }).join('') || '<div class="bar-row"><div class="bar-label">No data</div><div class="bar-val">—</div></div>';
+      }
+
+      const recent = b.recent_risk_signals || [];
+      const recentEl = el('recent-signals-container');
+      if (recentEl && Array.isArray(recent)) {
+        recentEl.innerHTML = recent.slice(0, 10).map(r => {
+          const score = r.risk_score ?? 0;
+          const cls = score >= 90 ? 'high' : score >= 70 ? 'medium' : 'low';
+          const scoreColor = score >= 90 ? 'var(--red)' : score >= 70 ? 'var(--amber)' : 'var(--blue)';
+          return `<div class="alert-item ${cls}">
+            <div class="alert-risk" style="color: ${scoreColor};">${score.toFixed(1)}</div>
+            <div class="alert-details">
+              <div class="alert-merchant">${r.merchant || 'Unknown'} — <span style="color: var(--text-muted);">${(r.category || '').replace(/_/g, ' ')}</span></div>
+              <div class="alert-meta">cc_num: ${r.cc_num_masked || '***'} · ${r.state || '?'} · Cardholder: ${r.cardholder || '?'} · ${r.seconds_ago ?? 0}s ago</div>
+            </div>
+            <div class="alert-amount" style="color: ${scoreColor};">${fmtUsd(r.amount || 0)}</div>
+          </div>`;
+        }).join('') || '<div class="alert-item"><div class="alert-details">No recent risk signals</div></div>';
+      }
+    }
+
+    let businessPollTimer = null;
+    async function fetchBusinessMetrics() {
+      try {
+        const r = await fetch(API('/api/business/metrics'));
+        const j = await r.json();
+        updateBusinessMetrics(j);
+      } catch (e) { /* ignore */ }
+    }
+    function startBusinessPoll() {
+      if (businessPollTimer) clearInterval(businessPollTimer);
+      fetchBusinessMetrics();
+      businessPollTimer = setInterval(fetchBusinessMetrics, 5000);
+    }
+    function stopBusinessPoll() {
+      if (businessPollTimer) { clearInterval(businessPollTimer); businessPollTimer = null; }
+    }
+
+    let machinePollTimer = null;
+    async function fetchMachineMetrics() {
+      try {
+        const r = await fetch(API('/api/machine/metrics'));
+        const j = await r.json();
+        const el = (id) => document.getElementById(id);
+        const t = j.throughput || {};
+        const fb = j.FlashBlade || {};
+        const model = j.Model || {};
+        if (el('mm-cpu')) el('mm-cpu').textContent = fmtNum(t.cpu ?? 0);
+        if (el('mm-gpu')) el('mm-gpu').textContent = fmtNum(t.gpu ?? 0);
+        if (el('mm-fb')) el('mm-fb').textContent = (t.fb ?? 0).toFixed(1);
+        if (el('mm-fb-read')) el('mm-fb-read').textContent = fb.read ?? '0MB/s';
+        if (el('mm-fb-write')) el('mm-fb-write').textContent = fb.write ?? '0MB/s';
+        const ml = model.ml_details || {};
+        if (el('mm-model-precision')) el('mm-model-precision').textContent = ml.precision != null ? (ml.precision * 100).toFixed(1) + '%' : '—';
+        if (el('mm-model-recall')) el('mm-model-recall').textContent = ml.recall != null ? (ml.recall * 100).toFixed(1) + '%' : '—';
+        if (el('mm-model-fraud')) el('mm-model-fraud').textContent = fmtUsd(model.fraud_exposure_identified ?? 0);
+      } catch (e) { /* ignore */ }
+    }
+    function startMachinePoll() {
+      if (machinePollTimer) clearInterval(machinePollTimer);
+      fetchMachineMetrics();
+      machinePollTimer = setInterval(fetchMachineMetrics, 5000);
+    }
+    function stopMachinePoll() {
+      if (machinePollTimer) { clearInterval(machinePollTimer); machinePollTimer = null; }
     }
 
     function connectWS() {
@@ -1093,7 +1313,58 @@
       fetch(API('/api/control/throttle'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rate: v }) }).catch(() => {});
     });
 
+    // Resource Allocation: fetch bounds and wire sliders
+    let resourceBounds = { cpu_min: 1, cpu_max: 8, memory_min_gb: 1, memory_max_gb: 8 };
+    let resourcePatchTimeout = null;
+    async function fetchResourceBounds() {
+      try {
+        const r = await fetch(API('/api/resources/bounds'));
+        const b = await r.json();
+        resourceBounds = b;
+        const rc = document.getElementById('resource-cpu');
+        const rm = document.getElementById('resource-mem');
+        if (rc) { rc.min = b.cpu_min; rc.max = b.cpu_max; rc.value = Math.min(parseInt(rc.value, 10) || 4, b.cpu_max); }
+        if (rm) { rm.min = b.memory_min_gb; rm.max = b.memory_max_gb; rm.value = Math.min(parseInt(rm.value, 10) || 8, b.memory_max_gb); }
+        updateResourceLabels();
+      } catch (e) {}
+    }
+    function updateResourceLabels() {
+      const rc = document.getElementById('resource-cpu');
+      const rm = document.getElementById('resource-mem');
+      const vc = document.getElementById('resource-cpu-val');
+      const vm = document.getElementById('resource-mem-val');
+      if (rc && vc) vc.textContent = rc.value;
+      if (rm && vm) vm.textContent = rm.value + ' GB';
+    }
+    function patchResources() {
+      const pod = document.getElementById('resource-pod-select').value;
+      const cpu = document.getElementById('resource-cpu').value;
+      const mem = document.getElementById('resource-mem').value;
+      const toast = document.getElementById('resource-toast');
+      fetch(API('/api/resources/' + pod), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cpu_limit: cpu, memory_limit: mem + 'Gi' })
+      }).then(r => r.json()).then(j => {
+        toast.textContent = j.success ? 'Updated' : (j.error || 'Failed');
+        toast.style.color = j.success ? 'var(--green)' : 'var(--red)';
+        setTimeout(() => { toast.textContent = ''; }, 3000);
+      }).catch(() => { toast.textContent = 'Request failed'; toast.style.color = 'var(--red)'; });
+    }
+    document.getElementById('resource-cpu').addEventListener('input', (e) => {
+      updateResourceLabels();
+      clearTimeout(resourcePatchTimeout);
+      resourcePatchTimeout = setTimeout(patchResources, 500);
+    });
+    document.getElementById('resource-mem').addEventListener('input', (e) => {
+      updateResourceLabels();
+      clearTimeout(resourcePatchTimeout);
+      resourcePatchTimeout = setTimeout(patchResources, 500);
+    });
+    fetchResourceBounds();
+
     fetchScale().then(() => connectWS());
+    startBusinessPoll();
   </script>
   
 </body>
