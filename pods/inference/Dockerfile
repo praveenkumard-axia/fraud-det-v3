@@ -9,7 +9,9 @@ WORKDIR /workspace
 # Install additional Python dependencies for custom backends
 RUN pip install --no-cache-dir \
     requests==2.31.0 \
-    numpy==1.26.3
+    numpy==1.26.3 \
+    polars>=0.20.0 \
+    psutil
 
 # Copy configuration files
 COPY queue_interface.py config_contract.py ./

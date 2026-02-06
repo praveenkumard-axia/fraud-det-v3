@@ -430,18 +430,41 @@ async def start_pipeline(background_tasks: BackgroundTasks):
         return {"success": False, "message": "Pipeline already running"}
 
     # Scale all deployments (CPU + GPU) to defaults
-    defaults = {
-        "data-gather": ScalingConfig.DEPLOYMENTS["data-gather"]["default_replicas"],
-        "preprocessing-cpu": ScalingConfig.DEPLOYMENTS["preprocessing"]["default_replicas"],
-        "inference-cpu": ScalingConfig.DEPLOYMENTS["inference"]["default_replicas"],
-        "preprocessing-gpu": ScalingConfig.DEPLOYMENTS["preprocessing-gpu"]["default_replicas"],
-        "model-build": ScalingConfig.DEPLOYMENTS["training"]["default_replicas"],
-        "inference-gpu": ScalingConfig.DEPLOYMENTS["inference-gpu"]["default_replicas"],
-    }
+    # Scale deployments based on CONFIG_MODE (cpu or gpu)
+    config_mode = os.getenv("CONFIG_MODE", "cpu").lower()
+    
+    defaults = {}
+    # Common deployments
+    defaults["data-gather"] = ScalingConfig.DEPLOYMENTS["data-gather"]["default_replicas"]
+    
+    if config_mode == "cpu":
+        defaults["preprocessing-cpu"] = ScalingConfig.DEPLOYMENTS["preprocessing"]["default_replicas"]
+        defaults["inference-cpu"] = ScalingConfig.DEPLOYMENTS["inference"]["default_replicas"]
+        
+    elif config_mode == "gpu":
+        defaults["preprocessing-gpu"] = ScalingConfig.DEPLOYMENTS["preprocessing-gpu"]["default_replicas"]
+        defaults["model-build"] = ScalingConfig.DEPLOYMENTS["training"]["default_replicas"]
+        defaults["inference-gpu"] = ScalingConfig.DEPLOYMENTS["inference-gpu"]["default_replicas"]
+        
+    else:
+        defaults.update({
+            "preprocessing-cpu": ScalingConfig.DEPLOYMENTS["preprocessing"]["default_replicas"],
+            "inference-cpu": ScalingConfig.DEPLOYMENTS["inference"]["default_replicas"],
+            "preprocessing-gpu": ScalingConfig.DEPLOYMENTS["preprocessing-gpu"]["default_replicas"],
+            "model-build": ScalingConfig.DEPLOYMENTS["training"]["default_replicas"],
+            "inference-gpu": ScalingConfig.DEPLOYMENTS["inference-gpu"]["default_replicas"],
+        })
     errors = []
     for pod_key, replicas in defaults.items():
         ok, msg = scale_pod(pod_key, replicas)
         if not ok:
+            # Ignore "not found" errors for mixed infrastructure (e.g. GPU pods missing on CPU cluster)
+            # Expanded check for different kubectl error formats
+            is_not_found = "not found" in msg.lower() or "no objects passed to scale" in msg.lower()
+            
+            if is_not_found:
+                print(f"Skipping scale for missing pod {pod_key}: {msg}")
+                continue
             errors.append(f"{pod_key}: {msg}")
         else:
             if pod_key == "data-gather":

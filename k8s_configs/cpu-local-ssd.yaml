@@ -62,8 +62,10 @@ spec:
     spec:
       containers:
         - name: data-gather
-          image: fraud-pipeline/data-gather:latest
-          imagePullPolicy: IfNotPresent
+          image: fraud-pipeline/backend:latest
+          command: ["/bin/sh", "-c"]
+          args: ["pip install --no-cache-dir faker pyarrow && python gather.py"]
+          imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
               value: "true"
@@ -82,17 +84,23 @@ spec:
           volumeMounts:
             - name: flashblade
               mountPath: /mnt/flashblade
+            - name: code-volume
+              mountPath: /app/gather.py
+              subPath: gather.py
           resources:
             requests:
-              cpu: "2000m"
-              memory: "4Gi"
+              cpu: "500m"
+              memory: "512Mi"
             limits:
-              cpu: "8000m"
-              memory: "16Gi"
+              cpu: "2000m"
+              memory: "2Gi"
       volumes:
         - name: flashblade
           persistentVolumeClaim:
             claimName: fraud-pipeline-flashblade
+        - name: code-volume
+          configMap:
+            name: data-gather-code
 ---
 # Pod 2: CPU Preprocessing (Polars)
 apiVersion: apps/v1
@@ -116,8 +124,9 @@ spec:
     spec:
       containers:
         - name: preprocessing-cpu
-          image: fraud-pipeline/preprocessing-cpu:latest
-          imagePullPolicy: IfNotPresent
+          image: fraud-pipeline/backend:latest
+          command: ["python", "prepare.py"]
+          imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
               value: "true"
@@ -130,17 +139,23 @@ spec:
           volumeMounts:
             - name: flashblade
               mountPath: /mnt/flashblade
+            - name: code-volume
+              mountPath: /app/prepare.py
+              subPath: prepare.py
           resources:
             requests:
-              cpu: "2000m"
-              memory: "8Gi"
+              cpu: "500m"
+              memory: "1Gi"
             limits:
-              cpu: "8000m"
-              memory: "32Gi"
+              cpu: "2000m"
+              memory: "4Gi"
       volumes:
         - name: flashblade
           persistentVolumeClaim:
             claimName: fraud-pipeline-flashblade
+        - name: code-volume
+          configMap:
+            name: preprocessing-code
 ---
 # Pod 5: CPU Inference (XGBoost fallback)
 apiVersion: apps/v1
@@ -165,7 +180,7 @@ spec:
       containers:
         - name: inference-cpu
           image: fraud-pipeline/inference-cpu:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
               value: "true"
@@ -181,11 +196,11 @@ spec:
               mountPath: /mnt/flashblade
           resources:
             requests:
-              cpu: "1000m"
-              memory: "4Gi"
+              cpu: "500m"
+              memory: "1Gi"
             limits:
-              cpu: "4000m"
-              memory: "16Gi"
+              cpu: "2000m"
+              memory: "4Gi"
       volumes:
         - name: flashblade
           persistentVolumeClaim:
@@ -205,10 +220,10 @@ metadata:
   namespace: fraud-pipeline
 rules:
   - apiGroups: ["apps"]
-    resources: ["deployments"]
+    resources: ["deployments", "deployments/scale"]
     verbs: ["get", "list", "patch", "update"]
   - apiGroups: [""]
-    resources: ["pods"]
+    resources: ["pods", "pods/resize"]
     verbs: ["get", "list", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -269,13 +284,15 @@ spec:
       containers:
         - name: backend
           image: fraud-pipeline/backend:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Never
           ports:
             - containerPort: 8000
               name: http
           env:
             - name: QUEUE_TYPE
               value: "flashblade"
+            - name: CONFIG_MODE
+              value: "cpu"
             - name: FLASHBLADE_PATH
               value: "/mnt/flashblade"
             - name: PROMETHEUS_URL
@@ -285,6 +302,12 @@ spec:
           volumeMounts:
             - name: flashblade
               mountPath: /mnt/flashblade
+            - name: code-volume
+              mountPath: /app/backend_server.py
+              subPath: backend_server.py
+            - name: code-volume
+              mountPath: /app/k8s_scale.py
+              subPath: k8s_scale.py
           resources:
             requests:
               cpu: "100m"
@@ -296,6 +319,9 @@ spec:
         - name: flashblade
           persistentVolumeClaim:
             claimName: fraud-pipeline-flashblade
+        - name: code-volume
+          configMap:
+            name: backend-code
 ---
 apiVersion: v1
 kind: Service

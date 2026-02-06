@@ -2285,10 +2285,13 @@
       const cpu = document.getElementById('resource-cpu').value;
       const mem = document.getElementById('resource-mem').value;
       const toast = document.getElementById('resource-toast');
+      // Convert CPU to millicores format (e.g., "4" -> "4000m")
+      const cpuLimit = (parseInt(cpu, 10) * 1000) + 'm';
+      const memoryLimit = mem * 1000 + 'Mi';
       fetch(API('/api/resources/' + pod), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cpu_limit: cpu, memory_limit: mem + 'Gi' })
+        body: JSON.stringify({ cpu_limit: cpuLimit, memory_limit: memoryLimit })
       }).then(r => r.json()).then(j => {
         toast.textContent = j.success ? 'Updated' : (j.error || 'Failed');
         toast.style.color = j.success ? 'var(--green)' : 'var(--red)';

@@ -50,7 +50,7 @@ status:
 	kubectl get pods -n $(NAMESPACE) -w
 
 restart:
-	kubectl rollout restart deployment -n $(NAMESPACE) --all
+	kubectl -n $(NAMESPACE) get deployments -o name | xargs kubectl -n $(NAMESPACE) rollout restart
 
 clean:
 	kubectl delete namespace $(NAMESPACE) --ignore-not-found

@@ -8,7 +8,9 @@ WORKDIR /app
 RUN pip install --no-cache-dir \
     numpy>=1.26.0 \
     pyarrow>=14.0.0 \
-    faker>=22.0.0
+    faker>=22.0.0 \
+    polars>=0.20.0 \
+    psutil
 
 COPY queue_interface.py config_contract.py ./
 COPY pods/data-gather/gather.py ./

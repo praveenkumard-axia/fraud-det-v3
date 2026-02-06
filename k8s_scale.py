@@ -138,12 +138,14 @@ def patch_pod_resources(
             "--subresource=resize", "--type=merge",
             "-p", json.dumps(patch_body),
         ]
+        print(f"DEBUG: Executing command: {' '.join(cmd)}")
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if result.returncode == 0:
                 return True, f"Resized {pod_key} (in-place) CPU={cpu_limit} memory={memory_limit}"
             # Resize subresource may not exist on older K8s
-            if "subresource" in (result.stderr or "").lower() or "not found" in (result.stderr or "").lower():
+            stderr_lower = (result.stderr or "").lower()
+            if "subresource" in stderr_lower or "not found" in stderr_lower or "notfound" in stderr_lower:
                 pass  # Fall through to deployment patch
             else:
                 return False, result.stderr.strip() or result.stdout.strip() or "kubectl patch failed"
@@ -167,7 +169,12 @@ def patch_pod_resources(
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode == 0:
             return True, f"Resized {pod_key} (rolling restart) CPU={cpu_limit} memory={memory_limit}"
-        return False, result.stderr.strip() or result.stdout.strip() or "kubectl patch failed"
+        
+        err_msg = result.stderr.strip() or result.stdout.strip()
+        if "not found" in err_msg.lower():
+             return False, f"Deployment '{deployment_name}' not found. Are you trying to scale a GPU pod on CPU config?"
+             
+        return False, err_msg or "kubectl patch failed"
     except subprocess.TimeoutExpired:
         return False, "kubectl patch timed out"
     except FileNotFoundError:

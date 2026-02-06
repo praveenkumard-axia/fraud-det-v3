@@ -138,7 +138,64 @@ kubectl set env deployment/backend -n fraud-pipeline PURE_SERVER=true PROMETHEUS
 
 | Issue | Fix |
 |-------|-----|
-| ImagePullBackOff | Build locally; use `make load-kind` (Kind) or `make load-minikube` (Minikube) |
-| CrashLoopBackOff | `make build-no-cache` then `make restart` |
-| PVC Pending | Check StorageClass; multi-node needs ReadWriteMany |
-| Metrics API missing | Install metrics-server (Kind/Minikube) |
+### 1. Image Issues (ErrImageNeverPull / ImagePullBackOff)
+
+If using Kind or Minikube with `imagePullPolicy: Never`, images must be manually loaded into the cluster node.
+
+**Kind:**
+```bash
+make load-kind
+```
+
+**Minikube:**
+```bash
+make load-minikube
+```
+
+### 2. Pods Stuck in "Pending" / Resource Starvation
+
+If pods remain `Pending`, the node may not have enough CPU/Memory.
+
+**Check constraints:**
+```bash
+kubectl describe pod -n fraud-pipeline <pod-name>
+kubectl describe nodes
+```
+
+**Fix:** Edit `k8s_configs/cpu-local-ssd.yaml` and reduce `resources.requests` (e.g., set memory to `512Mi` or `1Gi`).
+
+### 3. Persistent Volume Stuck in "Released"
+
+If `kubectl get pv` shows `Released` but not `Available` (binding issue), force delete both the PVC and PV to reset.
+
+```bash
+kubectl delete pvc fraud-pipeline-flashblade -n fraud-pipeline --force
+kubectl delete pv fraud-pipeline-local-pv --force
+# Re-deploy
+make deploy-cpu
+```
+
+### 4. Application Crash (CrashLoopBackOff)
+
+Rebuild images cleanly and restart deployments.
+
+```bash
+make build-no-cache
+make restart
+```
+
+### 5. RBAC / Scaling Errors
+
+If the backend fails to scale pods (logs show "Forbidden"), verify RBAC permissions. The `fraud-backend` ServiceAccount must have `deployments/scale` access.
+
+**Verify Role:**
+```bash
+kubectl describe role fraud-backend-role -n fraud-pipeline
+```
+
+**Fix:** Ensure the Role in `k8s_configs/*.yaml` includes:
+```yaml
+- apiGroups: ["apps"]
+  resources: ["deployments/scale"]
+  verbs: ["get", "patch", "update"]
+```
