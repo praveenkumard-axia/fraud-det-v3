@@ -1,21 +1,21 @@
 # Fraud Pipeline - All-in-one manifest
-# Apply: kubectl apply -f k8s/fraud-pipeline-all.yaml
-# All pods share volume fraud-pipeline-flashblade at /mnt/flashblade
+# Apply: kubectl apply -f k8s/fraud-det-v3-all.yaml
+# All pods share volume fraud-det-v3-flashblade at /mnt/flashblade
 
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: fraud-pipeline
+  name: fraud-det-v3
   labels:
-    app.kubernetes.io/name: fraud-pipeline
+    app.kubernetes.io/name: fraud-det-v3
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: fraud-pipeline-flashblade
-  namespace: fraud-pipeline
+  name: fraud-det-v3-flashblade
+  namespace: fraud-det-v3
   labels:
-    app: "fraud-pipeline"
+    app: "fraud-det-v3"
 spec:
   accessModes:
     - ReadWriteOnce
@@ -29,7 +29,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: data-gather
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "data-gather"
     tier: "generation"
@@ -46,7 +46,7 @@ spec:
     spec:
       containers:
         - name: data-gather
-          image: fraud-pipeline/data-gather:latest
+          image: fraud-det-v3/data-gather:latest
           imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
@@ -76,7 +76,7 @@ spec:
       volumes:
         - name: flashblade
           persistentVolumeClaim:
-            claimName: fraud-pipeline-flashblade
+            claimName: fraud-det-v3-flashblade
 ---
 # Pod 2: CPU preprocessing (Polars)
 # TestDrive-AI: 8 cores, 32Gi
@@ -84,7 +84,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: preprocessing-cpu
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "preprocessing-cpu"
     tier: "preprocessing"
@@ -101,7 +101,7 @@ spec:
     spec:
       containers:
         - name: preprocessing-cpu
-          image: fraud-pipeline/preprocessing-cpu:latest
+          image: fraud-det-v3/preprocessing-cpu:latest
           imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
@@ -125,7 +125,7 @@ spec:
       volumes:
         - name: flashblade
           persistentVolumeClaim:
-            claimName: fraud-pipeline-flashblade
+            claimName: fraud-det-v3-flashblade
 ---
 # Pod 3: GPU preprocessing (RAPIDS) - L40S
 # TestDrive-AI: 4 cores, 32Gi, 1 GPU
@@ -133,7 +133,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: preprocessing-gpu
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "preprocessing-gpu"
     tier: "preprocessing"
@@ -150,7 +150,7 @@ spec:
     spec:
       containers:
         - name: preprocessing-gpu
-          image: fraud-pipeline/preprocessing-gpu:latest
+          image: fraud-det-v3/preprocessing-gpu:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: CONTINUOUS_MODE
@@ -176,7 +176,7 @@ spec:
       volumes:
         - name: flashblade
           persistentVolumeClaim:
-            claimName: fraud-pipeline-flashblade
+            claimName: fraud-det-v3-flashblade
 ---
 # Pod 4: GPU model training (XGBoost/RAPIDS) - L40S
 # TestDrive-AI: 8 cores, 64Gi, 1 GPU
@@ -184,7 +184,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: model-build
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "model-build"
     tier: "training"
@@ -201,7 +201,7 @@ spec:
     spec:
       containers:
         - name: model-build
-          image: fraud-pipeline/model-build:latest
+          image: fraud-det-v3/model-build:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: CONTINUOUS_MODE
@@ -227,7 +227,7 @@ spec:
       volumes:
         - name: flashblade
           persistentVolumeClaim:
-            claimName: fraud-pipeline-flashblade
+            claimName: fraud-det-v3-flashblade
 ---
 # Pod 5: CPU inference (XGBoost fallback)
 # TestDrive-AI: 4 cores, 16Gi
@@ -235,7 +235,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: inference-cpu
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "inference-cpu"
     tier: "inference"
@@ -252,7 +252,7 @@ spec:
     spec:
       containers:
         - name: inference-cpu
-          image: fraud-pipeline/inference-cpu:latest
+          image: fraud-det-v3/inference-cpu:latest
           imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
@@ -278,7 +278,7 @@ spec:
       volumes:
         - name: flashblade
           persistentVolumeClaim:
-            claimName: fraud-pipeline-flashblade
+            claimName: fraud-det-v3-flashblade
 ---
 # Pod 6: GPU inference (Triton FIL) - L40S
 # TestDrive-AI: 4 cores, 32Gi, 1 GPU
@@ -286,7 +286,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: inference-gpu
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "inference-gpu"
     tier: "inference"
@@ -303,7 +303,7 @@ spec:
     spec:
       containers:
         - name: inference-gpu
-          image: fraud-pipeline/inference-gpu:latest
+          image: fraud-det-v3/inference-gpu:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -334,14 +334,14 @@ spec:
       volumes:
         - name: flashblade
           persistentVolumeClaim:
-            claimName: fraud-pipeline-flashblade
+            claimName: fraud-det-v3-flashblade
 ---
 # Service for inference-gpu (Triton) - inference-cpu connects at inference-gpu:8001
 apiVersion: v1
 kind: Service
 metadata:
   name: inference-gpu
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "inference-gpu"
 spec:
@@ -363,13 +363,13 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: fraud-backend
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: fraud-backend-role
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
@@ -382,11 +382,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: fraud-backend-binding
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
 subjects:
   - kind: ServiceAccount
     name: fraud-backend
-    namespace: fraud-pipeline
+    namespace: fraud-det-v3
 roleRef:
   kind: Role
   name: fraud-backend-role
@@ -408,7 +408,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: fraud-backend
-    namespace: fraud-pipeline
+    namespace: fraud-det-v3
 roleRef:
   kind: ClusterRole
   name: fraud-backend-nodes
@@ -420,7 +420,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "backend"
 spec:
@@ -436,7 +436,7 @@ spec:
       serviceAccountName: fraud-backend
       containers:
         - name: backend
-          image: fraud-pipeline/backend:latest
+          image: fraud-det-v3/backend:latest
           imagePullPolicy: Never
           ports:
             - containerPort: 8000
@@ -465,13 +465,13 @@ spec:
       volumes:
         - name: flashblade
           persistentVolumeClaim:
-            claimName: fraud-pipeline-flashblade
+            claimName: fraud-det-v3-flashblade
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: backend
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "backend"
 spec:

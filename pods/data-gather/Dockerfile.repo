@@ -1,5 +1,5 @@
 # Data gather built from repo root so queue_interface + config_contract are in the image.
-# Build: docker build -t fraud-pipeline/data-gather:latest -f pods/data-gather/Dockerfile.repo .
+# Build: docker build -t fraud-det-v3/data-gather:latest -f pods/data-gather/Dockerfile.repo .
 FROM python:3.11-slim
 
 WORKDIR /app

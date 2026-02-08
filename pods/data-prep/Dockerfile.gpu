@@ -1,5 +1,5 @@
 # GPU data-prep (RAPIDS) built from repo root so queue_interface + config_contract are in the image.
-# Build: docker build -t fraud-pipeline/preprocessing-gpu:latest -f pods/data-prep/Dockerfile.gpu .
+# Build: docker build -t fraud-det-v3/preprocessing-gpu:latest -f pods/data-prep/Dockerfile.gpu .
 FROM nvcr.io/nvidia/rapidsai/base:24.02-cuda12.0-py3.10
 
 ENV RAPIDS_NO_INITIALIZE=1

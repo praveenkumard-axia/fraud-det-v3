@@ -436,7 +436,7 @@ def get_dashboard_data():
 
 @app.post("/api/control/start")
 async def start_pipeline(background_tasks: BackgroundTasks):
-    """Start the pipeline by scaling K8s deployments to default replicas (fraud-pipeline namespace)."""
+    """Start the pipeline by scaling K8s deployments to default replicas (fraud-det-v3 namespace)."""
     if state.is_running:
         return {"success": False, "message": "Pipeline already running"}
 
@@ -502,7 +502,7 @@ async def start_pipeline(background_tasks: BackgroundTasks):
 
 @app.post("/api/control/stop")
 async def stop_pipeline():
-    """Stop the pipeline by scaling all K8s deployments to 0 (fraud-pipeline namespace)."""
+    """Stop the pipeline by scaling all K8s deployments to 0 (fraud-det-v3 namespace)."""
     for pod_key in ["data-gather", "preprocessing-cpu", "inference-cpu", "preprocessing-gpu", "model-build", "inference-gpu"]:
         scale_pod(pod_key, 0)
 
@@ -627,7 +627,7 @@ async def scale_inference(request: ScaleRequest):
 
 @app.post("/api/control/scale/generation")
 async def scale_generation(request: ScaleRequest):
-    """Scale data-gather (generation) pods via kubectl in fraud-pipeline namespace"""
+    """Scale data-gather (generation) pods via kubectl in fraud-det-v3 namespace"""
     replicas = request.replicas
     config = ScalingConfig.DEPLOYMENTS["data-gather"]
     if replicas < config["min_replicas"] or replicas > config["max_replicas"]:
@@ -649,7 +649,7 @@ async def scale_generation(request: ScaleRequest):
 
 @app.post("/api/control/scale/preprocessing-gpu")
 async def scale_preprocessing_gpu(request: ScaleRequest):
-    """Scale preprocessing (GPU) pods via kubectl in fraud-pipeline namespace"""
+    """Scale preprocessing (GPU) pods via kubectl in fraud-det-v3 namespace"""
     replicas = request.replicas
     config = ScalingConfig.DEPLOYMENTS["preprocessing-gpu"]
     if replicas < config["min_replicas"] or replicas > config["max_replicas"]:
@@ -671,7 +671,7 @@ async def scale_preprocessing_gpu(request: ScaleRequest):
 
 @app.post("/api/control/scale/inference-gpu")
 async def scale_inference_gpu(request: ScaleRequest):
-    """Scale inference (GPU) pods via kubectl in fraud-pipeline namespace"""
+    """Scale inference (GPU) pods via kubectl in fraud-det-v3 namespace"""
     replicas = request.replicas
     config = ScalingConfig.DEPLOYMENTS["inference-gpu"]
     if replicas < config["min_replicas"] or replicas > config["max_replicas"]:

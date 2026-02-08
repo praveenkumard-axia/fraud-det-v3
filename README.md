@@ -37,7 +37,7 @@ make load-minikube
 ### 3. Deploy
 
 **Option A: CPU Machine + Local SSD**
-Host must have directory `/mnt/data/fraud-pipeline` created.
+Host must have directory `/mnt/data/fraud-det-v3` created.
 ```bash
 make deploy-cpu
 ```
@@ -101,9 +101,9 @@ make stop
 | `make stop` | Stop pipeline (scale to 0) |
 | `make port-forward` | Port-forward backend to localhost:8000 |
 | `make logs` | Tail data-gather logs |
-| `make status` | Show pods in fraud-pipeline namespace |
+| `make status` | Show pods in fraud-det-v3 namespace |
 | `make restart` | Rollout restart all deployments |
-| `make clean` | Delete fraud-pipeline namespace |
+| `make clean` | Delete fraud-det-v3 namespace |
 
 ---
 
@@ -111,8 +111,8 @@ make stop
 
 | Resource | Purpose |
 |----------|---------|
-| Namespace | fraud-pipeline |
-| PVC | fraud-pipeline-flashblade (or local-pvc) |
+| Namespace | fraud-det-v3 |
+| PVC | fraud-det-v3-flashblade (or local-pvc) |
 | Deployments | data-gather, preprocessing-cpu/gpu, model-build, inference-cpu/gpu, backend |
 | Services | backend, inference-gpu |
 
@@ -124,12 +124,12 @@ Set on backend deployment:
 
 **Local disk / General:**
 ```bash
-kubectl set env deployment/backend -n fraud-pipeline PROMETHEUS_URL=http://prometheus.monitoring:9090
+kubectl set env deployment/backend -n fraud-det-v3 PROMETHEUS_URL=http://prometheus.monitoring:9090
 ```
 
 **FlashBlade (Pure1 + FB Prometheus):**
 ```bash
-kubectl set env deployment/backend -n fraud-pipeline PURE_SERVER=true PROMETHEUS_URL=http://prometheus.monitoring:9090
+kubectl set env deployment/backend -n fraud-det-v3 PURE_SERVER=true PROMETHEUS_URL=http://prometheus.monitoring:9090
 ```
 
 ---
@@ -158,7 +158,7 @@ If pods remain `Pending`, the node may not have enough CPU/Memory.
 
 **Check constraints:**
 ```bash
-kubectl describe pod -n fraud-pipeline <pod-name>
+kubectl describe pod -n fraud-det-v3 <pod-name>
 kubectl describe nodes
 ```
 
@@ -169,8 +169,8 @@ kubectl describe nodes
 If `kubectl get pv` shows `Released` but not `Available` (binding issue), force delete both the PVC and PV to reset.
 
 ```bash
-kubectl delete pvc fraud-pipeline-flashblade -n fraud-pipeline --force
-kubectl delete pv fraud-pipeline-local-pv --force
+kubectl delete pvc fraud-det-v3-flashblade -n fraud-det-v3 --force
+kubectl delete pv fraud-det-v3-local-pv --force
 # Re-deploy
 make deploy-cpu
 ```
@@ -190,7 +190,7 @@ If the backend fails to scale pods (logs show "Forbidden"), verify RBAC permissi
 
 **Verify Role:**
 ```bash
-kubectl describe role fraud-backend-role -n fraud-pipeline
+kubectl describe role fraud-backend-role -n fraud-det-v3
 ```
 
 **Fix:** Ensure the Role in `k8s_configs/*.yaml` includes:

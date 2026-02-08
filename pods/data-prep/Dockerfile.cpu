@@ -1,5 +1,5 @@
 # CPU data-prep built from repo root so queue_interface + config_contract are in the image.
-# Build: docker build -t fraud-pipeline/preprocessing-cpu:latest -f pods/data-prep/Dockerfile.cpu .
+# Build: docker build -t fraud-det-v3/preprocessing-cpu:latest -f pods/data-prep/Dockerfile.cpu .
 FROM python:3.11-slim
 
 WORKDIR /app

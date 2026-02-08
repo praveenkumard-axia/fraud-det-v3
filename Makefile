@@ -1,9 +1,9 @@
 # Fraud Detection Pipeline - Makefile
 # Run from repo root: make <target>
 
-NAMESPACE := fraud-pipeline
+NAMESPACE := fraud-det-v3
 MANIFEST_DUAL := k8s_configs/dual-flashblade.yaml
-IMAGES := fraud-pipeline/data-gather:latest fraud-pipeline/preprocessing-cpu:latest fraud-pipeline/preprocessing-gpu:latest fraud-pipeline/inference-cpu:latest fraud-pipeline/inference-gpu:latest fraud-pipeline/model-build:latest fraud-pipeline/backend:latest
+IMAGES := fraud-det-v3/data-gather:latest fraud-det-v3/preprocessing-cpu:latest fraud-det-v3/preprocessing-gpu:latest fraud-det-v3/inference-cpu:latest fraud-det-v3/inference-gpu:latest fraud-det-v3/model-build:latest fraud-det-v3/backend:latest
 BACKEND_URL ?= http://localhost:8000
 
 .PHONY: build build-no-cache load-kind load-minikube deploy deploy-dual start stop port-forward logs status restart clean

@@ -1,5 +1,5 @@
 # Dashboard backend: FastAPI + kubectl for pipeline control
-# Build from repo root: docker build -t fraud-pipeline/backend:latest -f Dockerfile.backend .
+# Build from repo root: docker build -t fraud-det-v3/backend:latest -f Dockerfile.backend .
 FROM python:3.11-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl kubectl && rm -rf /var/lib/apt/lists/*

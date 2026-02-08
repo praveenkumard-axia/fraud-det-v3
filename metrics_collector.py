@@ -59,7 +59,7 @@ def _get_dir_size(path: Path) -> int:
 def collect_metrics(
     queue_service: Any,
     telemetry: Dict[str, Any],
-    namespace: str = "fraud-pipeline",
+    namespace: str = "fraud-det-v3",
 ) -> Dict[str, Any]:
     """
     Build the dashboard payload from K8s, queue, and telemetry.
@@ -232,7 +232,7 @@ def write_metrics_json(
 def run_one_poll(
     queue_service: Any,
     telemetry: Dict[str, Any],
-    namespace: str = "fraud-pipeline",
+    namespace: str = "fraud-det-v3",
     path: Optional[Path] = None,
 ) -> Dict[str, Any]:
     """One polling cycle: collect, merge series, write JSON. Returns raw payload."""

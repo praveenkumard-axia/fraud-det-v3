@@ -1,5 +1,5 @@
 # CPU-only inference: runs client.py with XGBoost CPU fallback (no Triton/GPU).
-# Build from repo root: docker build -t fraud-pipeline/inference-cpu:latest -f pods/inference/Dockerfile.cpu .
+# Build from repo root: docker build -t fraud-det-v3/inference-cpu:latest -f pods/inference/Dockerfile.cpu .
 FROM python:3.11-slim
 
 WORKDIR /app

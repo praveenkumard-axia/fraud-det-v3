@@ -1,19 +1,19 @@
 # CPU Machine + Local SSD Configuration
-# Applies to a single node with local storage at /mnt/data/fraud-pipeline
+# Applies to a single node with local storage at /mnt/data/fraud-det-v3
 # Run: kubectl apply -f k8s_configs/cpu-local-ssd.yaml
 
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: fraud-pipeline
+  name: fraud-det-v3
   labels:
-    app.kubernetes.io/name: fraud-pipeline
+    app.kubernetes.io/name: fraud-det-v3
 ---
 # Local PV using hostPath (simulating local SSD)
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: fraud-pipeline-local-pv
+  name: fraud-det-v3-local-pv
   labels:
     type: local
 spec:
@@ -23,15 +23,15 @@ spec:
   accessModes:
     - ReadWriteOnce
   hostPath:
-    path: "/mnt/data/fraud-pipeline"
+    path: "/mnt/data/fraud-det-v3"
     type: DirectoryOrCreate
 ---
 # PVC binding to the local PV
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: fraud-pipeline-flashblade  # Keep name to match deployment volumes
-  namespace: fraud-pipeline
+  name: fraud-det-v3-flashblade  # Keep name to match deployment volumes
+  namespace: fraud-det-v3
 spec:
   storageClassName: local-storage
   accessModes:
@@ -45,7 +45,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: data-gather
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "data-gather"
     tier: "generation"
@@ -62,7 +62,7 @@ spec:
     spec:
       containers:
         - name: data-gather
-          image: fraud-pipeline/backend:latest
+          image: fraud-det-v3/backend:latest
           command: ["/bin/sh", "-c"]
           args: ["pip install --no-cache-dir faker pyarrow && python gather.py"]
           imagePullPolicy: Never
@@ -97,7 +97,7 @@ spec:
       volumes:
         - name: flashblade
           persistentVolumeClaim:
-            claimName: fraud-pipeline-flashblade
+            claimName: fraud-det-v3-flashblade
         - name: code-volume
           configMap:
             name: data-gather-code
@@ -107,7 +107,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: preprocessing-cpu
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "preprocessing-cpu"
     tier: "preprocessing"
@@ -124,7 +124,7 @@ spec:
     spec:
       containers:
         - name: preprocessing-cpu
-          image: fraud-pipeline/backend:latest
+          image: fraud-det-v3/backend:latest
           command: ["python", "prepare.py"]
           imagePullPolicy: Never
           env:
@@ -152,7 +152,7 @@ spec:
       volumes:
         - name: flashblade
           persistentVolumeClaim:
-            claimName: fraud-pipeline-flashblade
+            claimName: fraud-det-v3-flashblade
         - name: code-volume
           configMap:
             name: preprocessing-code
@@ -162,7 +162,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: inference-cpu
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "inference-cpu"
     tier: "inference"
@@ -179,7 +179,7 @@ spec:
     spec:
       containers:
         - name: inference-cpu
-          image: fraud-pipeline/inference-cpu:latest
+          image: fraud-det-v3/inference-cpu:latest
           imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
@@ -204,20 +204,20 @@ spec:
       volumes:
         - name: flashblade
           persistentVolumeClaim:
-            claimName: fraud-pipeline-flashblade
+            claimName: fraud-det-v3-flashblade
 ---
 # ServiceAccount + RBAC for backend
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: fraud-backend
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: fraud-backend-role
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments", "deployments/scale"]
@@ -230,11 +230,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: fraud-backend-binding
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
 subjects:
   - kind: ServiceAccount
     name: fraud-backend
-    namespace: fraud-pipeline
+    namespace: fraud-det-v3
 roleRef:
   kind: Role
   name: fraud-backend-role
@@ -256,7 +256,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: fraud-backend
-    namespace: fraud-pipeline
+    namespace: fraud-det-v3
 roleRef:
   kind: ClusterRole
   name: fraud-backend-nodes
@@ -267,7 +267,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "backend"
 spec:
@@ -283,7 +283,7 @@ spec:
       serviceAccountName: fraud-backend
       containers:
         - name: backend
-          image: fraud-pipeline/backend:latest
+          image: fraud-det-v3/backend:latest
           imagePullPolicy: Never
           ports:
             - containerPort: 8000
@@ -318,7 +318,7 @@ spec:
       volumes:
         - name: flashblade
           persistentVolumeClaim:
-            claimName: fraud-pipeline-flashblade
+            claimName: fraud-det-v3-flashblade
         - name: code-volume
           configMap:
             name: backend-code
@@ -327,7 +327,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: backend
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "backend"
 spec:

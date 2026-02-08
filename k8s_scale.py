@@ -1,5 +1,5 @@
 """
-Kubernetes scaling helper for fraud-pipeline namespace.
+Kubernetes scaling helper for fraud-det-v3 namespace.
 Uses subprocess to run kubectl scale. Call this from backend/dashboard when scaling pods.
 """
 
@@ -7,9 +7,9 @@ import json
 import subprocess
 from typing import Optional, Tuple
 
-NAMESPACE = "fraud-pipeline"
+NAMESPACE = "fraud-det-v3"
 
-# K8s deployment names in namespace fraud-pipeline (must match your manifests)
+# K8s deployment names in namespace fraud-det-v3 (must match your manifests)
 # Pod 1: generation (CPU) | Pod 2: preprocessing CPU | Pod 3: preprocessing GPU
 # Pod 4: model-build (GPU) | Pod 5: inference CPU | Pod 6: inference GPU
 DEPLOYMENT_NAMES = {
@@ -40,7 +40,7 @@ def stop_pipeline():
 
 def scale_pod(pod_key: str, replicas: int) -> Tuple[bool, str]:
     """
-    Scale a pod by logical key. Uses DEPLOYMENT_NAMES and fraud-pipeline namespace.
+    Scale a pod by logical key. Uses DEPLOYMENT_NAMES and fraud-det-v3 namespace.
     pod_key: one of data-gather, preprocessing-cpu, preprocessing-gpu, model-build, inference-cpu, inference-gpu
     Returns (success, message).
     """
@@ -52,7 +52,7 @@ def scale_pod(pod_key: str, replicas: int) -> Tuple[bool, str]:
 
 def scale_deployment(deployment_name: str, replicas: int) -> Tuple[bool, str]:
     """
-    Scale a deployment in the fraud-pipeline namespace.
+    Scale a deployment in the fraud-det-v3 namespace.
     Returns (success, message).
     """
     if replicas < 0:

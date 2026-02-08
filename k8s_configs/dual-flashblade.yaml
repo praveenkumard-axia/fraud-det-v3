@@ -5,18 +5,18 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: fraud-pipeline
+  name: fraud-det-v3
   labels:
-    app.kubernetes.io/name: fraud-pipeline
+    app.kubernetes.io/name: fraud-det-v3
 ---
 # PVC 1: CPU Volume
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: fraud-pipeline-cpu-fb
-  namespace: fraud-pipeline
+  name: fraud-det-v3-cpu-fb
+  namespace: fraud-det-v3
   labels:
-    app: "fraud-pipeline"
+    app: "fraud-det-v3"
     volume: "cpu"
 spec:
   storageClassName: pure-file
@@ -30,10 +30,10 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: fraud-pipeline-gpu-fb
-  namespace: fraud-pipeline
+  name: fraud-det-v3-gpu-fb
+  namespace: fraud-det-v3
   labels:
-    app: "fraud-pipeline"
+    app: "fraud-det-v3"
     volume: "gpu"
 spec:
   storageClassName: pure-file
@@ -49,7 +49,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: data-gather
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "data-gather"
     tier: "generation"
@@ -66,7 +66,7 @@ spec:
     spec:
       containers:
         - name: data-gather
-          image: fraud-pipeline/data-gather:latest
+          image: fraud-det-v3/data-gather:latest
           imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
@@ -98,10 +98,10 @@ spec:
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
-            claimName: fraud-pipeline-cpu-fb
+            claimName: fraud-det-v3-cpu-fb
         - name: gpu-fb
           persistentVolumeClaim:
-            claimName: fraud-pipeline-gpu-fb
+            claimName: fraud-det-v3-gpu-fb
 ---
 # Pod 2.1: CPU Preprocessing
 # Reads from CPU volume, writes to GPU volume (Step 2.1)
@@ -109,7 +109,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: preprocessing-cpu
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "preprocessing-cpu"
     tier: "preprocessing"
@@ -126,7 +126,7 @@ spec:
     spec:
       containers:
         - name: preprocessing-cpu
-          image: fraud-pipeline/preprocessing-cpu:latest
+          image: fraud-det-v3/preprocessing-cpu:latest
           imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
@@ -154,10 +154,10 @@ spec:
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
-            claimName: fraud-pipeline-cpu-fb
+            claimName: fraud-det-v3-cpu-fb
         - name: gpu-fb
           persistentVolumeClaim:
-            claimName: fraud-pipeline-gpu-fb
+            claimName: fraud-det-v3-gpu-fb
 ---
 # Pod 2.2: GPU Preprocessing
 # Reads from GPU volume, writes to GPU volume (Step 2.2)
@@ -165,7 +165,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: preprocessing-gpu
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "preprocessing-gpu"
     tier: "preprocessing"
@@ -182,7 +182,7 @@ spec:
     spec:
       containers:
         - name: preprocessing-gpu
-          image: fraud-pipeline/preprocessing-gpu:latest
+          image: fraud-det-v3/preprocessing-gpu:latest
           imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
@@ -210,7 +210,7 @@ spec:
       volumes:
         - name: gpu-fb
           persistentVolumeClaim:
-            claimName: fraud-pipeline-gpu-fb
+            claimName: fraud-det-v3-gpu-fb
 ---
 # Pod 3: GPU Model Training
 # Reads from GPU volume (first 1M), writes to both (Step 3)
@@ -218,7 +218,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: model-build
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "model-build"
     tier: "training"
@@ -235,7 +235,7 @@ spec:
     spec:
       containers:
         - name: model-build
-          image: fraud-pipeline/model-build:latest
+          image: fraud-det-v3/model-build:latest
           imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
@@ -269,10 +269,10 @@ spec:
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
-            claimName: fraud-pipeline-cpu-fb
+            claimName: fraud-det-v3-cpu-fb
         - name: gpu-fb
           persistentVolumeClaim:
-            claimName: fraud-pipeline-gpu-fb
+            claimName: fraud-det-v3-gpu-fb
 ---
 # Pod 4.1: CPU Inference
 # Reads from CPU volume (models), writes to CPU volume (Step 4.1)
@@ -280,7 +280,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: inference-cpu
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "inference-cpu"
     tier: "inference"
@@ -297,7 +297,7 @@ spec:
     spec:
       containers:
         - name: inference-cpu
-          image: fraud-pipeline/inference-cpu:latest
+          image: fraud-det-v3/inference-cpu:latest
           imagePullPolicy: Never
           env:
             - name: CONTINUOUS_MODE
@@ -323,7 +323,7 @@ spec:
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
-            claimName: fraud-pipeline-cpu-fb
+            claimName: fraud-det-v3-cpu-fb
 ---
 # Pod 4.2: GPU Inference
 # Reads from GPU volume (models), writes to GPU volume (Step 4.2)
@@ -331,7 +331,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: inference-gpu
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "inference-gpu"
     tier: "inference"
@@ -348,7 +348,7 @@ spec:
     spec:
       containers:
         - name: inference-gpu
-          image: fraud-pipeline/inference-gpu:latest
+          image: fraud-det-v3/inference-gpu:latest
           imagePullPolicy: Never
           ports:
             - containerPort: 8000
@@ -381,14 +381,14 @@ spec:
       volumes:
         - name: gpu-fb
           persistentVolumeClaim:
-            claimName: fraud-pipeline-gpu-fb
+            claimName: fraud-det-v3-gpu-fb
 ---
 # Service for inference-gpu
 apiVersion: v1
 kind: Service
 metadata:
   name: inference-gpu
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "inference-gpu"
 spec:
@@ -410,13 +410,13 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: fraud-backend
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: fraud-backend-role
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments", "deployments/scale"]
@@ -429,11 +429,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: fraud-backend-binding
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
 subjects:
   - kind: ServiceAccount
     name: fraud-backend
-    namespace: fraud-pipeline
+    namespace: fraud-det-v3
 roleRef:
   kind: Role
   name: fraud-backend-role
@@ -455,7 +455,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: fraud-backend
-    namespace: fraud-pipeline
+    namespace: fraud-det-v3
 roleRef:
   kind: ClusterRole
   name: fraud-backend-nodes
@@ -466,7 +466,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "backend"
 spec:
@@ -482,7 +482,7 @@ spec:
       serviceAccountName: fraud-backend
       containers:
         - name: backend
-          image: fraud-pipeline/backend:latest
+          image: fraud-det-v3/backend:latest
           imagePullPolicy: Never
           ports:
             - containerPort: 8000
@@ -515,16 +515,16 @@ spec:
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
-            claimName: fraud-pipeline-cpu-fb
+            claimName: fraud-det-v3-cpu-fb
         - name: gpu-fb
           persistentVolumeClaim:
-            claimName: fraud-pipeline-gpu-fb
+            claimName: fraud-det-v3-gpu-fb
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: backend
-  namespace: fraud-pipeline
+  namespace: fraud-det-v3
   labels:
     app: "backend"
 spec:
