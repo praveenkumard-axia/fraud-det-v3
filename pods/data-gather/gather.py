@@ -213,6 +213,7 @@ chunk_size = int(sys.argv[3])
 duration = int(sys.argv[4])
 pools_file = sys.argv[5]
 fraud_rate = float(sys.argv[6])
+secondary_dir = Path(sys.argv[7]) if len(sys.argv) > 7 and sys.argv[7] != 'None' else None
 
 # Load pools and init RNG
 with open(pools_file, 'rb') as f:
@@ -257,8 +258,15 @@ try:
     while is_continuous or (time.time() - start) < duration:
         data = generate_chunk(pools, chunk_size, rng, fraud_rate, base_time)
         table = pa.Table.from_pydict(data, schema=schema)
-        output_file = output_dir / f"worker_{worker_id:03d}_{file_count:05d}.parquet"
-        pq.write_table(table, output_file, compression='snappy')
+        filename = f"worker_{worker_id:03d}_{file_count:05d}.parquet"
+        
+        # Primary output
+        pq.write_table(table, output_dir / filename, compression='snappy')
+        
+        # Secondary output (optional)
+        if secondary_dir:
+            pq.write_table(table, secondary_dir / filename, compression='snappy')
+            
         file_count += 1
 except Exception as e:
     # Just exit if error, minimal logging in worker
@@ -272,10 +280,15 @@ def main():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    # Configuration
-    output_dir = StoragePaths.get_path('raw_data')
-    num_workers = int(os.getenv('NUM_WORKERS', '4'))  # Reduced for continuous mode
-    chunk_size = int(os.getenv('CHUNK_SIZE', '50000'))  # Smaller batches
+    # Configuration - Use Env vars with Fallback to Config Contract
+    output_dir = Path(os.getenv('OUTPUT_PATH', str(StoragePaths.get_path('raw'))))
+    output_dir_secondary = os.getenv('OUTPUT_PATH_SECONDARY')
+    if output_dir_secondary:
+        output_dir_secondary = Path(output_dir_secondary)
+        output_dir_secondary.mkdir(parents=True, exist_ok=True)
+
+    num_workers = int(os.getenv('NUM_WORKERS', '4'))
+    chunk_size = int(os.getenv('CHUNK_SIZE', '50000'))
     fraud_rate = float(os.getenv('FRAUD_RATE', '0.005'))
     
     # NEW: Continuous mode configuration
@@ -296,6 +309,9 @@ def main():
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     run_path = output_dir / f"run_{timestamp}"
     run_path.mkdir(parents=True, exist_ok=True)
+    
+    if output_dir_secondary:
+        (output_dir_secondary / run_path.name).mkdir(parents=True, exist_ok=True)
     
     # Print configuration
     log("=" * 70)
@@ -319,7 +335,7 @@ def main():
         p = subprocess.Popen(
             [sys.executable, '-c', WORKER_SCRIPT, 
              str(i), str(run_path), str(chunk_size), str(duration), 
-             str(pools_file), str(fraud_rate)],
+             str(pools_file), str(fraud_rate), str(output_dir_secondary / run_path.name if output_dir_secondary else None)],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
         processes.append(p)

@@ -2,13 +2,11 @@
 # Run from repo root: make <target>
 
 NAMESPACE := fraud-pipeline
-MANIFEST := k8s/fraud-pipeline-all.yaml
-MANIFEST_CPU := k8s_configs/cpu-local-ssd.yaml
-MANIFEST_GPU := k8s_configs/gpu-flashblade.yaml
+MANIFEST_DUAL := k8s_configs/dual-flashblade.yaml
 IMAGES := fraud-pipeline/data-gather:latest fraud-pipeline/preprocessing-cpu:latest fraud-pipeline/preprocessing-gpu:latest fraud-pipeline/inference-cpu:latest fraud-pipeline/inference-gpu:latest fraud-pipeline/model-build:latest fraud-pipeline/backend:latest
 BACKEND_URL ?= http://localhost:8000
 
-.PHONY: build build-no-cache load-kind load-minikube deploy deploy-cpu deploy-gpu start stop port-forward logs status restart clean
+.PHONY: build build-no-cache load-kind load-minikube deploy deploy-dual start stop port-forward logs status restart clean
 
 build:
 	chmod +x k8s/build-images.sh
@@ -26,13 +24,10 @@ load-minikube:
 	eval $$(minikube docker-env) && $(MAKE) build
 
 deploy:
-	kubectl apply -f $(MANIFEST)
+	kubectl apply -f $(MANIFEST_DUAL)
 
-deploy-cpu:
-	kubectl apply -f $(MANIFEST_CPU)
-
-deploy-gpu:
-	kubectl apply -f $(MANIFEST_GPU)
+deploy-dual:
+	kubectl apply -f $(MANIFEST_DUAL)
 
 start:
 	curl -s -X POST $(BACKEND_URL)/api/control/start

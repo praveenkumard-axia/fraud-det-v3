@@ -6,33 +6,76 @@ set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-echo "Building fraud-pipeline images (tag: latest)..."
+echo "=========================================================="
+echo "      Fraud Detection Pipeline - Image Builder"
+echo "=========================================================="
+
 NO_CACHE="${NO_CACHE:-}"
 [ -n "$NO_CACHE" ] && echo "Building with --no-cache"
 
-# Pipeline pods
-docker build $NO_CACHE -t fraud-pipeline/data-gather:latest -f pods/data-gather/Dockerfile.repo .
-docker build $NO_CACHE -t fraud-pipeline/preprocessing-cpu:latest -f pods/data-prep/Dockerfile.cpu .
-docker build $NO_CACHE -t fraud-pipeline/preprocessing-gpu:latest -f pods/data-prep/Dockerfile.gpu .
-docker build $NO_CACHE -t fraud-pipeline/inference-cpu:latest -f pods/inference/Dockerfile.cpu .
-docker build $NO_CACHE -t fraud-pipeline/inference-gpu:latest -f pods/inference/Dockerfile .
-docker build $NO_CACHE -t fraud-pipeline/model-build:latest -f pods/model-build/Dockerfile .
+# 1. Backend
+echo "Building Backend..."
+if [ -f "Dockerfile.backend" ]; then
+    docker build $NO_CACHE -t fraud-pipeline/backend:latest -f Dockerfile.backend .
+else
+    echo "Error: Dockerfile.backend not found!"; exit 1
+fi
 
-# Backend (dashboard API)
-docker build $NO_CACHE -t fraud-pipeline/backend:latest -f Dockerfile.backend .
+# 2. Data Gather
+echo "Building Data Gather (Generation)..."
+if [ -f "pods/data-gather/Dockerfile.repo" ]; then
+    docker build $NO_CACHE -t fraud-pipeline/data-gather:latest -f pods/data-gather/Dockerfile.repo .
+elif [ -f "pods/data-gather/Dockerfile" ]; then
+    docker build $NO_CACHE -t fraud-pipeline/data-gather:latest -f pods/data-gather/Dockerfile .
+else
+    echo "Error: Data Gather Dockerfile not found!"; exit 1
+fi
 
-echo "Verifying images..."
-docker run --rm fraud-pipeline/data-gather:latest ls -la /app/queue_interface.py /app/config_contract.py /app/gather.py 2>/dev/null || { echo "ERROR: data-gather image missing queue_interface.py"; exit 1; }
-docker run --rm fraud-pipeline/preprocessing-cpu:latest ls -la /app/queue_interface.py 2>/dev/null || true
-docker run --rm fraud-pipeline/backend:latest ls -la /app/backend_server.py /app/k8s_scale.py 2>/dev/null || true
+# 3. Preprocessing (CPU)
+echo "Building Preprocessing (CPU)..."
+if [ -f "pods/data-prep/Dockerfile.cpu" ]; then
+    docker build $NO_CACHE -t fraud-pipeline/preprocessing-cpu:latest -f pods/data-prep/Dockerfile.cpu .
+else
+    echo "Warning: pods/data-prep/Dockerfile.cpu not found, falling back to pods/data-prep/Dockerfile"
+    docker build $NO_CACHE -t fraud-pipeline/preprocessing-cpu:latest -f pods/data-prep/Dockerfile .
+fi
 
-echo ""
-echo "Done. Next steps:"
-echo "  1. Kind:     kind load docker-image fraud-pipeline/data-gather:latest fraud-pipeline/preprocessing-cpu:latest fraud-pipeline/preprocessing-gpu:latest fraud-pipeline/inference-cpu:latest fraud-pipeline/inference-gpu:latest fraud-pipeline/model-build:latest fraud-pipeline/backend:latest"
-echo "  2. Minikube: eval \$(minikube docker-env) && ./k8s/build-images.sh"
-echo "  3. Deploy:   kubectl apply -f k8s/fraud-pipeline-all.yaml"
-echo "  4. Restart:  kubectl rollout restart deployment -n fraud-pipeline --all"
-echo "  5. Watch:    kubectl get pods -n fraud-pipeline -w"
-echo ""
-echo "  Backend (dashboard) runs in-cluster. Port-forward to access:"
-echo "    kubectl port-forward -n fraud-pipeline svc/backend 8000:8000"
+# 4. Preprocessing (GPU)
+echo "Building Preprocessing (GPU)..."
+if [ -f "pods/data-prep/Dockerfile.gpu" ]; then
+    docker build $NO_CACHE -t fraud-pipeline/preprocessing-gpu:latest -f pods/data-prep/Dockerfile.gpu .
+else
+    echo "Warning: pods/data-prep/Dockerfile.gpu not found, skipping."
+fi
+
+# 5. Model Build (GPU/CPU)
+echo "Building Model Build..."
+if [ -f "pods/model-build/Dockerfile" ]; then
+    docker build $NO_CACHE -t fraud-pipeline/model-build:latest -f pods/model-build/Dockerfile .
+else
+    echo "Error: pods/model-build/Dockerfile not found!"; exit 1
+fi
+
+# 6. Inference (CPU)
+echo "Building Inference (CPU)..."
+if [ -f "pods/inference/Dockerfile.cpu" ]; then
+    docker build $NO_CACHE -t fraud-pipeline/inference-cpu:latest -f pods/inference/Dockerfile.cpu .
+else
+    echo "Error: pods/inference/Dockerfile.cpu not found!"; exit 1
+fi
+
+# 7. Inference (GPU)
+echo "Building Inference (GPU - Triton Server)..."
+if [ -f "pods/inference/Dockerfile" ]; then
+    docker build $NO_CACHE -t fraud-pipeline/inference-gpu:latest -f pods/inference/Dockerfile .
+else
+    echo "Warning: pods/inference/Dockerfile not found, skipping."
+fi
+
+echo "=========================================================="
+echo " Verifying key files in images..."
+docker run --rm fraud-pipeline/data-gather:latest ls -la /app/queue_interface.py /app/config_contract.py /app/gather.py >/dev/null 2>&1 || { echo "ERROR: data-gather image verification failed"; exit 1; }
+docker run --rm fraud-pipeline/preprocessing-cpu:latest ls -la /app/queue_interface.py >/dev/null 2>&1 || true
+docker run --rm fraud-pipeline/backend:latest ls -la /app/backend_server.py /app/k8s_scale.py >/dev/null 2>&1 || true
+
+echo "Done. All images built successfully."

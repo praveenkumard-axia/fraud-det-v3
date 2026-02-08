@@ -1,0 +1,536 @@
+# Multi-Volume FlashBlade configuration: CPU + GPU
+# Requires Pure Storage FlashBlade (pure-file StorageClass)
+# Run: kubectl apply -f k8s_configs/dual-flashblade.yaml
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: fraud-pipeline
+  labels:
+    app.kubernetes.io/name: fraud-pipeline
+---
+# PVC 1: CPU Volume
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fraud-pipeline-cpu-fb
+  namespace: fraud-pipeline
+  labels:
+    app: "fraud-pipeline"
+    volume: "cpu"
+spec:
+  storageClassName: pure-file
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
+---
+# PVC 2: GPU Volume
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: fraud-pipeline-gpu-fb
+  namespace: fraud-pipeline
+  labels:
+    app: "fraud-pipeline"
+    volume: "gpu"
+spec:
+  storageClassName: pure-file
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
+---
+# Pod 1: Data Gather (CPU generation)
+# Writes to both volumes (Step 1)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-gather
+  namespace: fraud-pipeline
+  labels:
+    app: "data-gather"
+    tier: "generation"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "data-gather"
+  template:
+    metadata:
+      labels:
+        app: "data-gather"
+        tier: "generation"
+    spec:
+      containers:
+        - name: data-gather
+          image: fraud-pipeline/data-gather:latest
+          imagePullPolicy: Never
+          env:
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "flashblade"
+            - name: CPU_VOLUME_PATH
+              value: "/mnt/cpu-fb"
+            - name: GPU_VOLUME_PATH
+              value: "/mnt/gpu-fb"
+            - name: OUTPUT_PATH
+              value: "/mnt/cpu-fb/raw"
+            - name: OUTPUT_PATH_SECONDARY
+              value: "/mnt/gpu-fb/raw"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: cpu-fb
+              mountPath: /mnt/cpu-fb
+            - name: gpu-fb
+              mountPath: /mnt/gpu-fb
+          resources:
+            requests:
+              cpu: "2000m"
+              memory: "4Gi"
+            limits:
+              cpu: "8000m"
+              memory: "16Gi"
+      volumes:
+        - name: cpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-cpu-fb
+        - name: gpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-gpu-fb
+---
+# Pod 2.1: CPU Preprocessing
+# Reads from CPU volume, writes to GPU volume (Step 2.1)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: preprocessing-cpu
+  namespace: fraud-pipeline
+  labels:
+    app: "preprocessing-cpu"
+    tier: "preprocessing"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "preprocessing-cpu"
+  template:
+    metadata:
+      labels:
+        app: "preprocessing-cpu"
+        tier: "preprocessing"
+    spec:
+      containers:
+        - name: preprocessing-cpu
+          image: fraud-pipeline/preprocessing-cpu:latest
+          imagePullPolicy: Never
+          env:
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "flashblade"
+            - name: INPUT_PATH
+              value: "/mnt/cpu-fb/raw"
+            - name: OUTPUT_PATH
+              value: "/mnt/gpu-fb/features"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: cpu-fb
+              mountPath: /mnt/cpu-fb
+            - name: gpu-fb
+              mountPath: /mnt/gpu-fb
+          resources:
+            requests:
+              cpu: "2000m"
+              memory: "8Gi"
+            limits:
+              cpu: "8000m"
+              memory: "32Gi"
+      volumes:
+        - name: cpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-cpu-fb
+        - name: gpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-gpu-fb
+---
+# Pod 2.2: GPU Preprocessing
+# Reads from GPU volume, writes to GPU volume (Step 2.2)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: preprocessing-gpu
+  namespace: fraud-pipeline
+  labels:
+    app: "preprocessing-gpu"
+    tier: "preprocessing"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "preprocessing-gpu"
+  template:
+    metadata:
+      labels:
+        app: "preprocessing-gpu"
+        tier: "preprocessing"
+    spec:
+      containers:
+        - name: preprocessing-gpu
+          image: fraud-pipeline/preprocessing-gpu:latest
+          imagePullPolicy: Never
+          env:
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "flashblade"
+            - name: INPUT_PATH
+              value: "/mnt/gpu-fb/raw"
+            - name: OUTPUT_PATH
+              value: "/mnt/gpu-fb/features"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: gpu-fb
+              mountPath: /mnt/gpu-fb
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4000m"
+              memory: "32Gi"
+              nvidia.com/gpu: "1"
+      volumes:
+        - name: gpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-gpu-fb
+---
+# Pod 3: GPU Model Training
+# Reads from GPU volume (first 1M), writes to both (Step 3)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-build
+  namespace: fraud-pipeline
+  labels:
+    app: "model-build"
+    tier: "training"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "model-build"
+  template:
+    metadata:
+      labels:
+        app: "model-build"
+        tier: "training"
+    spec:
+      containers:
+        - name: model-build
+          image: fraud-pipeline/model-build:latest
+          imagePullPolicy: Never
+          env:
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "flashblade"
+            - name: INPUT_PATH
+              value: "/mnt/gpu-fb/features"
+            - name: OUTPUT_PATH
+              value: "/mnt/cpu-fb/models"
+            - name: OUTPUT_PATH_SECONDARY
+              value: "/mnt/gpu-fb/models"
+            - name: TRAIN_SAMPLE_LIMIT
+              value: "1000000"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: cpu-fb
+              mountPath: /mnt/cpu-fb
+            - name: gpu-fb
+              mountPath: /mnt/gpu-fb
+          resources:
+            requests:
+              cpu: "2000m"
+              memory: "16Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "8000m"
+              memory: "64Gi"
+              nvidia.com/gpu: "1"
+      volumes:
+        - name: cpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-cpu-fb
+        - name: gpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-gpu-fb
+---
+# Pod 4.1: CPU Inference
+# Reads from CPU volume (models), writes to CPU volume (Step 4.1)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-cpu
+  namespace: fraud-pipeline
+  labels:
+    app: "inference-cpu"
+    tier: "inference"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "inference-cpu"
+  template:
+    metadata:
+      labels:
+        app: "inference-cpu"
+        tier: "inference"
+    spec:
+      containers:
+        - name: inference-cpu
+          image: fraud-pipeline/inference-cpu:latest
+          imagePullPolicy: Never
+          env:
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "flashblade"
+            - name: INPUT_PATH
+              value: "/mnt/cpu-fb/models"
+            - name: OUTPUT_PATH
+              value: "/mnt/cpu-fb/results"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: cpu-fb
+              mountPath: /mnt/cpu-fb
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "4Gi"
+            limits:
+              cpu: "4000m"
+              memory: "16Gi"
+      volumes:
+        - name: cpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-cpu-fb
+---
+# Pod 4.2: GPU Inference
+# Reads from GPU volume (models), writes to GPU volume (Step 4.2)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-gpu
+  namespace: fraud-pipeline
+  labels:
+    app: "inference-gpu"
+    tier: "inference"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "inference-gpu"
+  template:
+    metadata:
+      labels:
+        app: "inference-gpu"
+        tier: "inference"
+    spec:
+      containers:
+        - name: inference-gpu
+          image: fraud-pipeline/inference-gpu:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+              name: http
+            - containerPort: 8001
+              name: grpc
+            - containerPort: 8002
+              name: metrics
+          env:
+            - name: QUEUE_TYPE
+              value: "flashblade"
+            - name: INPUT_PATH
+              value: "/mnt/gpu-fb/models"
+            - name: OUTPUT_PATH
+              value: "/mnt/gpu-fb/results"
+            - name: PYTHONUNBUFFERED
+              value: "1"
+          volumeMounts:
+            - name: gpu-fb
+              mountPath: /mnt/gpu-fb
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "8Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "4000m"
+              memory: "32Gi"
+              nvidia.com/gpu: "1"
+      volumes:
+        - name: gpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-gpu-fb
+---
+# Service for inference-gpu
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-gpu
+  namespace: fraud-pipeline
+  labels:
+    app: "inference-gpu"
+spec:
+  selector:
+    app: "inference-gpu"
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+    - name: grpc
+      port: 8001
+      targetPort: 8001
+    - name: metrics
+      port: 8002
+      targetPort: 8002
+---
+# ServiceAccount + RBAC for backend
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fraud-backend
+  namespace: fraud-pipeline
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fraud-backend-role
+  namespace: fraud-pipeline
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "list", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fraud-backend-binding
+  namespace: fraud-pipeline
+subjects:
+  - kind: ServiceAccount
+    name: fraud-backend
+    namespace: fraud-pipeline
+roleRef:
+  kind: Role
+  name: fraud-backend-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fraud-backend-nodes
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: fraud-backend-nodes-binding
+subjects:
+  - kind: ServiceAccount
+    name: fraud-backend
+    namespace: fraud-pipeline
+roleRef:
+  kind: ClusterRole
+  name: fraud-backend-nodes
+  apiGroup: rbac.authorization.k8s.io
+---
+# Backend: Dashboard API
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: fraud-pipeline
+  labels:
+    app: "backend"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "backend"
+  template:
+    metadata:
+      labels:
+        app: "backend"
+    spec:
+      serviceAccountName: fraud-backend
+      containers:
+        - name: backend
+          image: fraud-pipeline/backend:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: QUEUE_TYPE
+              value: "flashblade"
+            - name: CONFIG_MODE
+              value: "gpu"
+            - name: CPU_VOLUME_PATH
+              value: "/mnt/cpu-fb"
+            - name: GPU_VOLUME_PATH
+              value: "/mnt/gpu-fb"
+            - name: PROMETHEUS_URL
+              value: ""
+            - name: PURE_SERVER
+              value: "true"
+          volumeMounts:
+            - name: cpu-fb
+              mountPath: /mnt/cpu-fb
+            - name: gpu-fb
+              mountPath: /mnt/gpu-fb
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+      volumes:
+        - name: cpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-cpu-fb
+        - name: gpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-pipeline-gpu-fb
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: fraud-pipeline
+  labels:
+    app: "backend"
+spec:
+  selector:
+    app: "backend"
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

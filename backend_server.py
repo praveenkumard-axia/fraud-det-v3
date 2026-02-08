@@ -100,6 +100,9 @@ class PipelineState:
             "ram_percent": 0,
             "fraud_blocked": 0,
             "txns_scored": 0,
+            # Dual Volume FlashBlade Metrics
+            "fb_cpu_throughput": 0,
+            "fb_gpu_throughput": 0,
         }
         
         # Configuration
@@ -140,6 +143,8 @@ class PipelineState:
                 "ram_percent": 0,
                 "fraud_blocked": 0,
                 "txns_scored": 0,
+                "fb_cpu_throughput": 0,
+                "fb_gpu_throughput": 0,
             }
             self.start_time = None
     
@@ -362,9 +367,13 @@ def get_dashboard_data():
     gpu_throughput = int(total_throughput * 0.7)
     cpu_throughput = int(total_throughput * 0.3)
     
-    # FlashBlade metrics (simulated based on data velocity)
-    data_velocity_gbps = (total_throughput * 256) / (1024**3)  # 256 bytes per row
-    flashblade_util = min(15, int(data_velocity_gbps * 10))  # Cap at 15%
+    # FlashBlade metrics (now using dual-volume telemetry)
+    fb_cpu_throughput = tel.get("fb_cpu_throughput", 0)
+    fb_gpu_throughput = tel.get("fb_gpu_throughput", 0)
+    total_fb_throughput = fb_cpu_throughput + fb_gpu_throughput
+    
+    # FlashBlade utilization capped at 25GB/s (FlashBlade S500 entry limit approx)
+    flashblade_util = min(100, int((total_fb_throughput / 25000) * 100)) if total_fb_throughput > 0 else 0
     
     return {
         "pipeline_progress": {
@@ -396,10 +405,12 @@ def get_dashboard_data():
             "high": high_dist
         },
         "flashblade": {
-            "read": 1200 + (flashblade_util * 10),  # Simulated
-            "write": 850 + (flashblade_util * 5),
+            "read": fb_cpu_throughput,
+            "write": fb_gpu_throughput,
             "util": flashblade_util,
-            "headroom": round(100 / max(1, flashblade_util), 1)
+            "headroom": round(100 - flashblade_util, 1),
+            "cpu_vol": fb_cpu_throughput,
+            "gpu_vol": fb_gpu_throughput
         },
         "status": {
             "live": state.is_running,
@@ -1261,13 +1272,21 @@ async def _metrics_poll_loop():
         try:
             with state.lock:
                 telemetry = state.telemetry.copy()
-            await asyncio.to_thread(
+            
+            raw_metrics = await asyncio.to_thread(
                 run_one_poll,
                 state.queue_service,
                 telemetry,
                 namespace=NAMESPACE,
                 path=METRICS_JSON_PATH,
             )
+            
+            # Sync back dual-volume metrics to global state
+            if raw_metrics:
+                storage = raw_metrics.get("storage", {})
+                with state.lock:
+                    state.telemetry["fb_cpu_throughput"] = storage.get("cpu_mbps", 0)
+                    state.telemetry["fb_gpu_throughput"] = storage.get("gpu_mbps", 0)
         except Exception as e:
             print(f"Metrics poll error: {e}")
         await asyncio.sleep(1)

@@ -51,38 +51,40 @@ class StoragePaths:
     DevOps must mount FlashBlade or NFS at these paths
     """
     
-    BASE_PATH = Path("/mnt/flashblade")
+    CPU_BASE_PATH = Path("/mnt/cpu-fb")
+    GPU_BASE_PATH = Path("/mnt/gpu-fb")
     
-    RAW_DATA = BASE_PATH / "raw-data"
-    FEATURES = BASE_PATH / "features"
-    MODELS = BASE_PATH / "models"
-    INFERENCE_LOGS = BASE_PATH / "inference-logs"
+    RAW_DATA = Path("raw")
+    FEATURES = Path("features")
+    MODELS = Path("models")
+    RESULTS = Path("results")
     
     # Fallback to local paths for development
     @classmethod
-    def get_path(cls, path_type: str) -> Path:
-        """Get storage path with fallback to local for development"""
-        paths = {
-            "raw_data": cls.RAW_DATA,
+    def get_path(cls, path_type: str, volume: str = "cpu") -> Path:
+        """Get storage path based on volume and type"""
+        base = cls.CPU_BASE_PATH if volume == "cpu" else cls.GPU_BASE_PATH
+        
+        # Check override environment variables
+        if volume == "cpu":
+            base = Path(os.getenv("CPU_VOLUME_PATH", str(base)))
+        else:
+            base = Path(os.getenv("GPU_VOLUME_PATH", str(base)))
+
+        sub_path = {
+            "raw": cls.RAW_DATA,
             "features": cls.FEATURES,
             "models": cls.MODELS,
-            "inference_logs": cls.INFERENCE_LOGS
-        }
+            "results": cls.RESULTS
+        }.get(path_type, Path(""))
+
+        path = base / sub_path
         
-        path = paths.get(path_type, cls.BASE_PATH)
-        
-        # If FlashBlade not mounted, use local paths
-        if not cls.BASE_PATH.exists():
+        # Fallback to local paths if not mounted
+        if not base.exists():
             local_base = Path(__file__).parent
-            fallback_paths = {
-                "raw_data": local_base / "run_data_output",
-                "features": local_base / "run_features_output",
-                "models": local_base / "run_models_output",
-                "inference_logs": local_base / "run_inference_output"
-            }
-            path = fallback_paths.get(path_type, local_base)
+            path = local_base / "run_queue_data" / volume / sub_path
         
-        # Create directory if it doesn't exist
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -208,6 +210,13 @@ class EnvironmentVariables:
     # Storage configuration (FlashBlade-based queuing)
     FLASHBLADE_ENABLED = "FLASHBLADE_ENABLED"
     FLASHBLADE_PATH = "FLASHBLADE_PATH"
+    
+    # Dual-Volume Configuration
+    CPU_VOLUME_PATH = "CPU_VOLUME_PATH"
+    GPU_VOLUME_PATH = "GPU_VOLUME_PATH"
+    INPUT_PATH = "INPUT_PATH"
+    OUTPUT_PATH = "OUTPUT_PATH"
+    OUTPUT_PATH_SECONDARY = "OUTPUT_PATH_SECONDARY"
     
     # File-based queue configuration
     POLL_INTERVAL_SECONDS = "POLL_INTERVAL_SECONDS"  # How often to check for new files
