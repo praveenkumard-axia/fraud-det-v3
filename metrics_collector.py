@@ -14,9 +14,10 @@ import subprocess
 import time
 import os
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 from config_contract import StoragePaths
+from k8s_scale import get_deployment_resources
 
 MAX_SERIES_LEN = 60
 
@@ -55,6 +56,40 @@ def _get_dir_size(path: Path) -> int:
         return sum(f.stat().st_size for f in path.iterdir() if f.is_file())
     except Exception:
         return 0
+
+def _kubectl_top_pods(namespace: str) -> List[Dict[str, Any]]:
+    """Fetch real-time CPU/Mem usage from kubectl top pods."""
+    cmd = ["kubectl", "top", "pods", "-n", namespace, "--no-headers"]
+    pods = []
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            return []
+        
+        for line in result.stdout.strip().split("\n"):
+            parts = line.split()
+            if len(parts) >= 3:
+                # App name from pod name (assumes deployment-name-randomsuffix)
+                pod_name = parts[0]
+                deploy_name = "-".join(pod_name.split("-")[:-2]) if pod_name.count("-") >= 2 else pod_name
+                
+                cpu_raw = parts[1]
+                mem_raw = parts[2]
+                
+                # Convert "100m" -> 100
+                cpu = int(cpu_raw[:-1]) if cpu_raw.endswith("m") else int(cpu_raw)
+                # Convert "100Mi" -> 100
+                mem = int(mem_raw[:-2]) if mem_raw.endswith("Mi") else int(mem_raw)
+                
+                pods.append({
+                    "pod": pod_name,
+                    "app": deploy_name,
+                    "cpu_millicores": cpu,
+                    "mem_mib": mem
+                })
+    except Exception:
+        pass
+    return pods
 
 def collect_metrics(
     queue_service: Any,
@@ -148,6 +183,9 @@ def collect_metrics(
         "17_flashblade_util_pct": pure1.get("util_pct", 0),
     }
 
+    # Resource Allocation (Infra request/limit)
+    res_alloc = get_deployment_resources()
+
     payload = {
         "cpu": [cpu_point],
         "gpu": [gpu_point],
@@ -160,6 +198,10 @@ def collect_metrics(
             "latency_ms": latency_ms
         },
         "kpis": kpis,
+        "infra": {
+            "pods": pod_top,
+            "allocation": res_alloc
+        },
         "business": {
             "no_of_generated": generated,
             "no_of_processed": processed,

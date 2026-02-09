@@ -181,3 +181,35 @@ def patch_pod_resources(
         return False, "kubectl not found"
     except Exception as e:
         return False, str(e)
+
+def get_deployment_resources() -> dict:
+    """
+    Fetch CPU and Memory limits/requests for all deployments in the namespace.
+    Returns {deployment_name: {cpu_limit: str, mem_limit: str, cpu_request: str, mem_request: str}}
+    """
+    cmd = ["kubectl", "get", "deployments", "-n", NAMESPACE, "-o", "json"]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            return {}
+        
+        data = json.loads(result.stdout)
+        resources = {}
+        for item in data.get("items", []):
+            name = item["metadata"]["name"]
+            spec = item["spec"]["template"]["spec"]
+            # Assume first container is the main one
+            container = spec["containers"][0]
+            res = container.get("resources", {})
+            limits = res.get("limits", {})
+            requests = res.get("requests", {})
+            
+            resources[name] = {
+                "cpu_limit": limits.get("cpu", "N/A"),
+                "mem_limit": limits.get("memory", "N/A"),
+                "cpu_request": requests.get("cpu", "N/A"),
+                "mem_request": requests.get("memory", "N/A"),
+            }
+        return resources
+    except Exception:
+        return {}

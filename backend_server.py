@@ -1224,6 +1224,16 @@ async def get_machine_metrics():
     # Model: full response from get_business_metrics
     model_data = await get_business_metrics()
 
+    # Infra (Pod usage and resource allocation)
+    infra_data = {}
+    if METRICS_JSON_PATH.exists():
+        try:
+            with open(METRICS_JSON_PATH, "r") as f:
+                dm = json.load(f)
+            infra_data = dm.get("infra", {})
+        except Exception:
+            pass
+
     return {
         "throughput": {
             "cpu": cpu_throughput,
@@ -1235,6 +1245,7 @@ async def get_machine_metrics():
             "write": f"{(fb_write or 0):.1f}MB/s",
         },
         "Model": model_data,
+        "infra": infra_data,
     }
 
 

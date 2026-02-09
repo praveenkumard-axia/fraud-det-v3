@@ -659,8 +659,60 @@
 
     .stage-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    /* Gauge / Accelerometer styles */
+    .gauge-container {
+      position: relative;
+      width: 140px;
+      height: 70px;
+      /* Semi-circle */
+      margin: 10px auto;
+      overflow: hidden;
+    }
+
+    .gauge-bg {
+      width: 140px;
+      height: 140px;
+      border: 15px solid var(--bg-elevated);
+      border-radius: 50%;
+      position: absolute;
+    }
+
+    .gauge-fill {
+      width: 140px;
+      height: 140px;
+      border: 15px solid var(--purple);
+      border-radius: 50%;
+      position: absolute;
+      border-bottom-color: transparent;
+      border-left-color: transparent;
+      transform: rotate(-45deg);
+      /* 0% */
+      transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .gauge-cover {
+      width: 110px;
+      height: 55px;
+      background: var(--bg-panel);
+      position: absolute;
+      bottom: 0;
+      left: 15px;
+      border-radius: 110px 110px 0 0;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding-bottom: 5px;
+    }
+
+    .gauge-value {
+      font-family: var(--mono);
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
     }
 
     /* ── Scaling controls ── */
@@ -1301,7 +1353,20 @@
         <!-- ── LEFT COLUMN ── -->
         <div class="col-8 stack">
 
-          <!-- Pipeline Progress -->
+          <!-- Accelerometer / Generation Rate -->
+          <div class="card" style="text-align: center;">
+            <div class="card-title" style="margin-bottom: 5px;">Generation Velocity</div>
+            <div class="gauge-container">
+              <div class="gauge-bg"></div>
+              <div class="gauge-fill" id="gen-gauge-fill"></div>
+              <div class="gauge-cover">
+                <span class="gauge-value" id="gen-gauge-val">0</span>
+              </div>
+            </div>
+            <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Txns / 5 Sec</div>
+          </div>
+
+          <!-- Pipeline Status -->
           <div class="card">
             <div class="card-header">
               <span class="card-title">Pipeline Progress</span>
@@ -1339,12 +1404,12 @@
                 </div>
                 <div>
                   <div class="stage-header">
-                    <span class="stage-label" style="color: var(--green);">GPU Workers (RAPIDS)</span>
-                    <span class="stage-value" style="color: var(--green);" id="tech-prep-gpu">0</span>
+                    <span class="stage-label" style="color: var(--blue);">CPU Workers</span>
+                    <span class="stage-value" style="color: var(--blue);" id="tech-infer-cpu">0</span>
                   </div>
                   <div class="stage-bar">
-                    <div class="stage-fill" id="tech-prep-gpu-bar"
-                      style="width: 0%; background: linear-gradient(90deg, #16a34a, var(--green));">0</div>
+                    <div class="stage-fill" id="tech-infer-cpu-bar"
+                      style="width: 0%; background: linear-gradient(90deg, #2563eb, var(--blue));">0</div>
                   </div>
                 </div>
               </div>
@@ -1358,12 +1423,12 @@
               <div class="stage-grid">
                 <div>
                   <div class="stage-header">
-                    <span class="stage-label" style="color: var(--blue);">CPU Workers</span>
-                    <span class="stage-value" style="color: var(--blue);" id="tech-infer-cpu">0</span>
+                    <span class="stage-label" style="color: var(--green);">GPU Workers (RAPIDS)</span>
+                    <span class="stage-value" style="color: var(--green);" id="tech-prep-gpu">0</span>
                   </div>
                   <div class="stage-bar">
-                    <div class="stage-fill" id="tech-infer-cpu-bar"
-                      style="width: 0%; background: linear-gradient(90deg, #2563eb, var(--blue));">0</div>
+                    <div class="stage-fill" id="tech-prep-gpu-bar"
+                      style="width: 0%; background: linear-gradient(90deg, #16a34a, var(--green));">0</div>
                   </div>
                 </div>
                 <div>
@@ -1645,56 +1710,6 @@
             </div>
           </div>
 
-          <!-- Scaling Controls -->
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">Scaling Controls</span>
-            </div>
-            <div style="margin-bottom: 12px;">
-              <div class="progress-label"><span style="color: var(--purple);">Generator Speed</span><span
-                  style="font-family: var(--mono);">50K txn/s</span></div>
-              <input type="range" min="10" max="100" value="50">
-            </div>
-            <div class="sep"></div>
-            <div class="scale-row">
-              <span class="scale-label" style="color: var(--blue);">CPU Prep Workers</span>
-              <div class="scale-controls">
-                <button class="scale-btn" data-scale="preprocessing" data-delta="-1">−</button>
-                <span class="scale-count" id="scale-preprocessing">0</span>
-                <button class="scale-btn" data-scale="preprocessing" data-delta="1">+</button>
-              </div>
-            </div>
-            <div class="scale-row">
-              <span class="scale-label" style="color: var(--green);">GPU Prep Streams</span>
-              <div class="scale-controls">
-                <button class="scale-btn" data-scale="preprocessing_gpu" data-delta="-1">−</button>
-                <span class="scale-count" id="scale-preprocessing-gpu">0</span>
-                <button class="scale-btn" data-scale="preprocessing_gpu" data-delta="1">+</button>
-              </div>
-            </div>
-            <div class="scale-row">
-              <span class="scale-label" style="color: var(--blue);">CPU Infer Workers</span>
-              <div class="scale-controls">
-                <button class="scale-btn" data-scale="inference" data-delta="-1">−</button>
-                <span class="scale-count" id="scale-inference">0</span>
-                <button class="scale-btn" data-scale="inference" data-delta="1">+</button>
-              </div>
-            </div>
-            <div class="scale-row">
-              <span class="scale-label" style="color: var(--green);">GPU Infer Streams</span>
-              <div class="scale-controls">
-                <button class="scale-btn" data-scale="inference_gpu" data-delta="-1">−</button>
-                <span class="scale-count" id="scale-inference-gpu">0</span>
-                <button class="scale-btn" data-scale="inference_gpu" data-delta="1">+</button>
-              </div>
-            </div>
-            <div class="scale-row">
-              <span class="scale-label" style="color: var(--purple);">Generator Speed (txn/s)</span>
-              <input type="range" id="generator-speed" min="1000" max="50000" value="10000" style="width: 80px;">
-              <span class="scale-count" id="generator-speed-val">10K</span>
-            </div>
-          </div>
-
           <!-- Resource Allocation -->
           <div class="card">
             <div class="card-header">
@@ -1723,6 +1738,12 @@
               <input type="range" id="resource-mem" min="1" max="8" value="8" step="1">
             </div>
             <div id="resource-toast" style="font-size: 11px; min-height: 18px;"></div>
+
+            <div class="sep"></div>
+            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Current Infra Allocation</div>
+            <div id="infra-allocation-list" style="font-size: 10px; display: grid; gap: 4px;">
+              <!-- Populated by JS -->
+            </div>
           </div>
 
           <!-- Controls -->
@@ -1850,6 +1871,27 @@
       }
 
       const generated = gen.no_of_generated ?? b.no_of_generated ?? 0;
+
+      // Calculate generation rate per 5 sec for gauge
+      if (window.lastGeneratedCount !== undefined) {
+        const diff = Math.max(0, generated - window.lastGeneratedCount);
+        // For simplicity, we'll show current estimated 5sec throughput.
+        const rate5sec = diff * 5;
+        if (rate5sec > 0 || (window.lastRate5sec > 0)) {
+          if (document.getElementById('gen-gauge-val')) {
+            document.getElementById('gen-gauge-val').textContent = fmtNum(rate5sec);
+          }
+          if (document.getElementById('gen-gauge-fill')) {
+            const maxGauge = 500000; // 100K/s * 5
+            const pct = Math.min(100, (rate5sec / maxGauge) * 100);
+            const deg = -45 + (pct * 1.8);
+            document.getElementById('gen-gauge-fill').style.transform = `rotate(${deg}deg)`;
+          }
+        }
+        window.lastRate5sec = rate5sec;
+      }
+      window.lastGeneratedCount = generated;
+
       const prepTotal = prep.no_of_transformed ?? 0;
       const maxVal = Math.max(generated, prepTotal, 1);
 
@@ -2122,6 +2164,20 @@
         // Combined TPS and Latency
         if (el('throughput-combined')) el('throughput-combined').textContent = fmtNum(combinedTPS) + ' TPS';
         if (el('throughput-latency')) el('throughput-latency').textContent = latencyMs.toFixed(0) + 'ms';
+
+        // Update Infra Allocation display
+        const infra = j.infra || {};
+        const alloc = infra.allocation || {};
+        const infraList = el('infra-allocation-list');
+        if (infraList && Object.keys(alloc).length > 0) {
+          infraList.innerHTML = Object.entries(alloc).map(([name, res]) => `
+            <div style="display: flex; justify-content: space-between; background: var(--bg-card); padding: 4px 8px; border-radius: 3px;">
+              <span style="font-weight: 600;">${name}</span>
+              <span style="font-family: var(--mono); color: var(--blue);">CPU: ${res.cpu_limit}</span>
+              <span style="font-family: var(--mono); color: var(--green);">Mem: ${res.mem_limit}</span>
+            </div>
+          `).join('');
+        }
 
         // Update Pipeline Progress bars using Model data
         // Use transactions_analyzed to derive progress stages
