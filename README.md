@@ -107,6 +107,30 @@ make stop
 
 ---
 
+## Windows Instructions (PowerShell)
+
+If you are on Windows and don't have `make` or `bash`, use the provided PowerShell scripts:
+
+| PowerShell Command | Equivalent Makefile Target |
+|--------------------|----------------------------|
+| `.\Makefile.ps1 build` | `make build` |
+| `.\Makefile.ps1 build-no-cache` | `make build-no-cache` |
+| `.\Makefile.ps1 deploy` | `make deploy` |
+| `.\Makefile.ps1 start` | `make start` |
+| `.\Makefile.ps1 stop` | `make stop` |
+| `.\Makefile.ps1 port-forward` | `make port-forward` |
+| `.\Makefile.ps1 logs` | `make logs` |
+| `.\Makefile.ps1 status` | `make status` |
+| `.\Makefile.ps1 restart` | `make restart` |
+| `.\Makefile.ps1 clean` | `make clean` |
+
+**Note:** Ensure your PowerShell execution policy allows running local scripts:
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+---
+
 ## K8s resources
 
 | Resource | Purpose |
