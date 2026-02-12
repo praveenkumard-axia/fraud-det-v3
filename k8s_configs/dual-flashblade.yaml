@@ -14,6 +14,9 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: fraud-det-v3-cpu-fb-pv
+  labels:
+    storage: flashblade
+    workload: cpu
 spec:
   capacity:
     storage: 500Gi
@@ -34,6 +37,9 @@ apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: fraud-det-v3-gpu-fb-pv
+  labels:
+    storage: flashblade
+    workload: gpu
 spec:
   capacity:
     storage: 500Gi
@@ -66,6 +72,10 @@ spec:
       storage: 500Gi
   storageClassName: ""
   volumeName: fraud-det-v3-cpu-fb-pv
+  selector:
+    matchLabels:
+      storage: flashblade
+      workload: cpu
 ---
 # PVC 2: GPU Volume
 apiVersion: v1
@@ -84,6 +94,10 @@ spec:
       storage: 500Gi
   storageClassName: ""
   volumeName: fraud-det-v3-gpu-fb-pv
+  selector:
+    matchLabels:
+      storage: flashblade
+      workload: gpu
 ---
 # Pod 1: Data Gather (CPU generation)
 # Writes to both volumes (Step 1)
@@ -108,9 +122,11 @@ spec:
     spec:
       containers:
         - name: data-gather
-          image: pduraiswamy16722/fraud-det-v3-data-gather:latest
+          image: apandit07650/fraud-det-v3-data-gather:latest
           imagePullPolicy: Always
           env:
+            - name: FLASHBLADE_PATH
+              value: "/mnt/cpu-fb"
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
@@ -123,6 +139,8 @@ spec:
               value: "/mnt/cpu-fb/raw"
             - name: OUTPUT_PATH_SECONDARY
               value: "/mnt/gpu-fb/raw"
+            - name: NUM_WORKERS
+              value: "8"
             - name: PYTHONUNBUFFERED
               value: "1"
           volumeMounts:
@@ -133,10 +151,10 @@ spec:
           resources:
             requests:
               cpu: "2000m"
-              memory: "4Gi"
+              memory: "16Gi"
             limits:
               cpu: "8000m"
-              memory: "16Gi"
+              memory: "32Gi"
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
@@ -168,9 +186,11 @@ spec:
     spec:
       containers:
         - name: preprocessing-cpu
-          image: pduraiswamy16722/fraud-det-v3-data-prep:latest
+          image: apandit07650/fraud-det-v3-data-prep:cpu
           imagePullPolicy: Always
           env:
+            - name: FLASHBLADE_PATH
+              value: "/mnt/cpu-fb"
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
@@ -224,9 +244,11 @@ spec:
     spec:
       containers:
         - name: preprocessing-gpu
-          image: pduraiswamy16722/fraud-det-v3-data-prep:latest
+          image: apandit07650/fraud-det-v3-data-prep:gpu
           imagePullPolicy: Always
           env:
+            - name: FLASHBLADE_PATH
+              value: "/mnt/gpu-fb"
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
@@ -277,9 +299,11 @@ spec:
     spec:
       containers:
         - name: model-build
-          image: pduraiswamy16722/fraud-det-v3-model-build:latest
+          image: apandit07650/fraud-det-v3-model-build:gpu
           imagePullPolicy: Always
           env:
+            - name: FLASHBLADE_PATH
+              value: "/mnt/cpu-fb"
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
@@ -339,9 +363,11 @@ spec:
     spec:
       containers:
         - name: inference-cpu
-          image: pduraiswamy16722/fraud-det-v3-inference:latest
+          image: apandit07650/fraud-det-v3-inference:cpu
           imagePullPolicy: Always
           env:
+            - name: FLASHBLADE_PATH
+              value: "/mnt/cpu-fb"
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
@@ -359,11 +385,11 @@ spec:
               mountPath: /mnt/cpu-fb
           resources:
             requests:
-              cpu: "1000m"
-              memory: "4Gi"
-            limits:
-              cpu: "4000m"
+              cpu: "2000m"
               memory: "16Gi"
+            limits:
+              cpu: "8000m"
+              memory: "32Gi"
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
@@ -392,7 +418,7 @@ spec:
     spec:
       containers:
         - name: inference-gpu
-          image: pduraiswamy16722/fraud-det-v3-inference:latest
+          image: apandit07650/fraud-det-v3-inference:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
@@ -402,6 +428,8 @@ spec:
             - containerPort: 8002
               name: metrics
           env:
+            - name: FLASHBLADE_PATH
+              value: "/mnt/gpu-fb"
             - name: QUEUE_TYPE
               value: "flashblade"
             - name: INPUT_PATH
@@ -528,12 +556,14 @@ spec:
       serviceAccountName: fraud-backend
       containers:
         - name: backend
-          image: pduraiswamy16722/fraud-det-v3-dockerfile.backend:latest
+          image: apandit07650/fraud-det-v3-dockerfile.backend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
               name: http
           env:
+            - name: FLASHBLADE_PATH
+              value: "/mnt/cpu-fb"
             - name: QUEUE_TYPE
               value: "flashblade"
             - name: CONFIG_MODE

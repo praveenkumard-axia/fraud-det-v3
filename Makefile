@@ -3,7 +3,7 @@
 
 NAMESPACE := fraud-det-v3
 MANIFEST_DUAL := k8s_configs/dual-flashblade.yaml
-IMAGES := pduraiswamy16722/fraud-det-v3-data-gather:latest pduraiswamy16722/fraud-det-v3-data-prep:latest pduraiswamy16722/fraud-det-v3-inference:latest pduraiswamy16722/fraud-det-v3-model-build:latest pduraiswamy16722/fraud-det-v3-dockerfile.backend:latest
+IMAGES := apandit07650/fraud-det-v3-data-gather:latest apandit07650/fraud-det-v3-data-prep:latest apandit07650/fraud-det-v3-inference:latest apandit07650/fraud-det-v3-model-build:latest apandit07650/fraud-det-v3-dockerfile.backend:latest
 BACKEND_URL ?= http://localhost:8000
 
 .PHONY: build build-no-cache load-kind load-minikube deploy deploy-dual start stop port-forward logs status restart clean

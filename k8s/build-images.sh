@@ -14,7 +14,7 @@ NO_CACHE="${NO_CACHE:-}"
 [ -n "$NO_CACHE" ] && echo "Building with --no-cache"
 
 # Tag and Push to Docker Hub
-USER="pduraiswamy16722"
+USER="apandit07650"
 
 # 1. Backend
 echo "Building Backend..."
