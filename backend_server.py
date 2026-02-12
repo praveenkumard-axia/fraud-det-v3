@@ -149,7 +149,8 @@ class PipelineState:
             self.start_time = None
     
     def update_telemetry(self, stage: str, status: str, rows: int, throughput: int, 
-                         elapsed: float, cpu_percent: float, ram_percent: float):
+                         elapsed: float, cpu_percent: float, ram_percent: float,
+                         fraud_blocked: Optional[int] = None):
         """Update telemetry from pod output"""
         with self.lock:
             self.telemetry["current_stage"] = stage
@@ -174,9 +175,13 @@ class PipelineState:
                 self.telemetry["inference_gpu"] = int(rows * 0.7)
                 self.telemetry["txns_scored"] = rows
             
-            # Calculate fraud metrics (0.5% fraud rate, $50 avg transaction)
-            fraud_rate = 0.005
-            self.telemetry["fraud_blocked"] = int(self.telemetry["txns_scored"] * fraud_rate)
+            # Calculate or use REAL fraud metrics
+            if fraud_blocked is not None:
+                self.telemetry["fraud_blocked"] = fraud_blocked
+            else:
+                # Fallback to 0.5% fraud rate if not provided (e.g. from data-prep stage)
+                fraud_rate = 0.005
+                self.telemetry["fraud_blocked"] = int(self.telemetry["txns_scored"] * fraud_rate)
             
             self.telemetry["total_elapsed"] = elapsed
 
@@ -198,14 +203,17 @@ def parse_telemetry_line(line: str) -> Optional[Dict]:
         parts = line.split("|")
         for part in parts:
             part = part.strip()
-            if "=" in part and "[TELEMETRY]" not in part:
+            # Remove [TELEMETRY] tag if present in this part (usually the first one)
+            part = part.replace("[TELEMETRY]", "").strip()
+            
+            if "=" in part:
                 key, value = part.split("=", 1)
                 key = key.strip()
                 value = value.strip()
                 
                 if key in ["stage", "status"]:
                     data[key] = value
-                elif key in ["rows", "throughput"]:
+                elif key in ["rows", "throughput", "fraud_blocked"]:
                     data[key] = int(value)
                 elif key in ["elapsed", "cpu_cores", "ram_gb", "ram_percent"]:
                     data[key] = float(value)
@@ -262,6 +270,7 @@ def run_pod_async(pod_name: str, script_path: str):
                     status=telemetry.get("status", "Running"),
                     rows=telemetry.get("rows", 0),
                     throughput=telemetry.get("throughput", 0),
+                    fraud_blocked=telemetry.get("fraud_blocked"),
                     elapsed=telemetry.get("elapsed", 0.0),
                     cpu_percent=telemetry.get("ram_percent", 0.0),  # Using ram as proxy for CPU
                     ram_percent=telemetry.get("ram_percent", 0.0)

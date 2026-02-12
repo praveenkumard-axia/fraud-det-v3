@@ -43,10 +43,10 @@ def signal_handler(signum, frame):
 def log(msg):
     print(f"{datetime.now():%Y-%m-%d %H:%M:%S} | {msg}", flush=True)
 
-def log_telemetry(rows, throughput, elapsed, cpu_cores, mem_gb, mem_percent, status="Running"):
+def log_telemetry(rows, throughput, elapsed, cpu_cores, mem_gb, mem_percent, fraud_count=0, status="Running"):
     """Write structured telemetry to logs for dashboard parsing."""
     try:
-        telemetry = f"[TELEMETRY] stage=Inference | status={status} | rows={int(rows)} | throughput={int(throughput)} | elapsed={round(elapsed, 1)} | cpu_cores={round(cpu_cores, 1)} | ram_gb={round(mem_gb, 2)} | ram_percent={round(mem_percent, 1)}"
+        telemetry = f"[TELEMETRY] stage=Inference | status={status} | rows={int(rows)} | throughput={int(throughput)} | fraud_blocked={int(fraud_count)} | elapsed={round(elapsed, 1)} | cpu_cores={round(cpu_cores, 1)} | ram_gb={round(mem_gb, 2)} | ram_percent={round(mem_percent, 1)}"
         print(telemetry, flush=True)
     except:
         pass
@@ -375,7 +375,7 @@ def run_continuous_inference(triton_client, cpu_model, model_name, batch_size, q
             log(f"Inferred: {total_inferred:,} | Throughput: {throughput:,.0f} rows/sec | "
                 f"High-Risk: {high_risk_count} | Categories: {len(category_metrics)} | "
                 f"CPU: {cpu_cores:.1f} cores | RAM: {mem.percent:.1f}%")
-            log_telemetry(total_inferred, throughput, elapsed, cpu_cores, mem_gb, mem.percent)
+            log_telemetry(total_inferred, throughput, elapsed, cpu_cores, mem_gb, mem.percent, fraud_count=high_risk_count)
             
         except Exception as e:
             log(f"Error in continuous inference: {e}")
