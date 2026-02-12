@@ -9,6 +9,46 @@ metadata:
   labels:
     app.kubernetes.io/name: fraud-det-v3
 ---
+# PV 1: CPU Volume (Manual)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: fraud-det-v3-cpu-fb-pv
+spec:
+  capacity:
+    storage: 500Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: 10.23.181.65
+    path: /financial-fraud-detection-demo
+  storageClassName: ""
+  mountOptions:
+    - vers=3
+    - tcp
+    - hard
+    - intr
+---
+# PV 2: GPU Volume (Manual)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: fraud-det-v3-gpu-fb-pv
+spec:
+  capacity:
+    storage: 500Gi
+  accessModes:
+    - ReadWriteMany
+  nfs:
+    server: 10.23.181.65
+    path: /financial-fraud-detection-demo
+  storageClassName: ""
+  mountOptions:
+    - vers=3
+    - tcp
+    - hard
+    - intr
+---
 # PVC 1: CPU Volume
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -19,12 +59,13 @@ metadata:
     app: "fraud-det-v3"
     volume: "cpu"
 spec:
-  storageClassName: pure-file
   accessModes:
     - ReadWriteMany
   resources:
     requests:
-      storage: 50Gi
+      storage: 500Gi
+  storageClassName: ""
+  volumeName: fraud-det-v3-cpu-fb-pv
 ---
 # PVC 2: GPU Volume
 apiVersion: v1
@@ -36,12 +77,13 @@ metadata:
     app: "fraud-det-v3"
     volume: "gpu"
 spec:
-  storageClassName: pure-file
   accessModes:
     - ReadWriteMany
   resources:
     requests:
-      storage: 50Gi
+      storage: 500Gi
+  storageClassName: ""
+  volumeName: fraud-det-v3-gpu-fb-pv
 ---
 # Pod 1: Data Gather (CPU generation)
 # Writes to both volumes (Step 1)
@@ -66,8 +108,8 @@ spec:
     spec:
       containers:
         - name: data-gather
-          image: fraud-det-v3/data-gather:latest
-          imagePullPolicy: Never
+          image: pduraiswamy16722/fraud-det-v3-data-gather:latest
+          imagePullPolicy: Always
           env:
             - name: CONTINUOUS_MODE
               value: "true"
@@ -126,8 +168,8 @@ spec:
     spec:
       containers:
         - name: preprocessing-cpu
-          image: fraud-det-v3/preprocessing-cpu:latest
-          imagePullPolicy: Never
+          image: pduraiswamy16722/fraud-det-v3-data-prep:latest
+          imagePullPolicy: Always
           env:
             - name: CONTINUOUS_MODE
               value: "true"
@@ -182,8 +224,8 @@ spec:
     spec:
       containers:
         - name: preprocessing-gpu
-          image: fraud-det-v3/preprocessing-gpu:latest
-          imagePullPolicy: Never
+          image: pduraiswamy16722/fraud-det-v3-data-prep:latest
+          imagePullPolicy: Always
           env:
             - name: CONTINUOUS_MODE
               value: "true"
@@ -235,8 +277,8 @@ spec:
     spec:
       containers:
         - name: model-build
-          image: fraud-det-v3/model-build:latest
-          imagePullPolicy: Never
+          image: pduraiswamy16722/fraud-det-v3-model-build:latest
+          imagePullPolicy: Always
           env:
             - name: CONTINUOUS_MODE
               value: "true"
@@ -297,14 +339,16 @@ spec:
     spec:
       containers:
         - name: inference-cpu
-          image: fraud-det-v3/inference-cpu:latest
-          imagePullPolicy: Never
+          image: pduraiswamy16722/fraud-det-v3-inference:latest
+          imagePullPolicy: Always
           env:
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
               value: "flashblade"
             - name: INPUT_PATH
+              value: "/mnt/cpu-fb/models"
+            - name: MODEL_REPOSITORY
               value: "/mnt/cpu-fb/models"
             - name: OUTPUT_PATH
               value: "/mnt/cpu-fb/results"
@@ -348,8 +392,8 @@ spec:
     spec:
       containers:
         - name: inference-gpu
-          image: fraud-det-v3/inference-gpu:latest
-          imagePullPolicy: Never
+          image: pduraiswamy16722/fraud-det-v3-inference:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
               name: http
@@ -361,6 +405,8 @@ spec:
             - name: QUEUE_TYPE
               value: "flashblade"
             - name: INPUT_PATH
+              value: "/mnt/gpu-fb/models"
+            - name: MODEL_REPOSITORY
               value: "/mnt/gpu-fb/models"
             - name: OUTPUT_PATH
               value: "/mnt/gpu-fb/results"
@@ -482,8 +528,8 @@ spec:
       serviceAccountName: fraud-backend
       containers:
         - name: backend
-          image: fraud-det-v3/backend:latest
-          imagePullPolicy: Never
+          image: pduraiswamy16722/fraud-det-v3-dockerfile.backend:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
               name: http

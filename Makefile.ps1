@@ -16,6 +16,7 @@ switch ($Target) {
         powershell -ExecutionPolicy Bypass -File .\k8s\build-images.ps1
     }
     "build-no-cache" {
+        $ErrorActionPreference = "Continue" # Don't stop on NO_CACHE check
         $env:NO_CACHE = "--no-cache"
         powershell -ExecutionPolicy Bypass -File .\k8s\build-images.ps1
         $env:NO_CACHE = ""

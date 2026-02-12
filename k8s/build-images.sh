@@ -13,69 +13,36 @@ echo "=========================================================="
 NO_CACHE="${NO_CACHE:-}"
 [ -n "$NO_CACHE" ] && echo "Building with --no-cache"
 
+# Tag and Push to Docker Hub
+USER="pduraiswamy16722"
+
 # 1. Backend
 echo "Building Backend..."
-if [ -f "Dockerfile.backend" ]; then
-    docker build $NO_CACHE -t fraud-det-v3/backend:latest -f Dockerfile.backend .
-else
-    echo "Error: Dockerfile.backend not found!"; exit 1
-fi
+docker build $NO_CACHE -t $USER/fraud-det-v3-dockerfile.backend:latest -f Dockerfile.backend .
+docker push $USER/fraud-det-v3-dockerfile.backend:latest
 
 # 2. Data Gather
 echo "Building Data Gather (Generation)..."
-if [ -f "pods/data-gather/Dockerfile.repo" ]; then
-    docker build $NO_CACHE -t fraud-det-v3/data-gather:latest -f pods/data-gather/Dockerfile.repo .
-elif [ -f "pods/data-gather/Dockerfile" ]; then
-    docker build $NO_CACHE -t fraud-det-v3/data-gather:latest -f pods/data-gather/Dockerfile .
-else
-    echo "Error: Data Gather Dockerfile not found!"; exit 1
-fi
+docker build $NO_CACHE -t $USER/fraud-det-v3-data-gather:latest -f pods/data-gather/Dockerfile .
+docker push $USER/fraud-det-v3-data-gather:latest
 
-# 3. Preprocessing (CPU)
-echo "Building Preprocessing (CPU)..."
-if [ -f "pods/data-prep/Dockerfile.cpu" ]; then
-    docker build $NO_CACHE -t fraud-det-v3/preprocessing-cpu:latest -f pods/data-prep/Dockerfile.cpu .
-else
-    echo "Warning: pods/data-prep/Dockerfile.cpu not found, falling back to pods/data-prep/Dockerfile"
-    docker build $NO_CACHE -t fraud-det-v3/preprocessing-cpu:latest -f pods/data-prep/Dockerfile .
-fi
+# 3. Preprocessing (Unified)
+echo "Building Preprocessing..."
+docker build $NO_CACHE -t $USER/fraud-det-v3-data-prep:latest -f pods/data-prep/Dockerfile .
+docker push $USER/fraud-det-v3-data-prep:latest
 
-# 4. Preprocessing (GPU)
-echo "Building Preprocessing (GPU)..."
-if [ -f "pods/data-prep/Dockerfile.gpu" ]; then
-    docker build $NO_CACHE -t fraud-det-v3/preprocessing-gpu:latest -f pods/data-prep/Dockerfile.gpu .
-else
-    echo "Warning: pods/data-prep/Dockerfile.gpu not found, skipping."
-fi
-
-# 5. Model Build (GPU/CPU)
+# 4. Model Build
 echo "Building Model Build..."
-if [ -f "pods/model-build/Dockerfile" ]; then
-    docker build $NO_CACHE -t fraud-det-v3/model-build:latest -f pods/model-build/Dockerfile .
-else
-    echo "Error: pods/model-build/Dockerfile not found!"; exit 1
-fi
+docker build $NO_CACHE -t $USER/fraud-det-v3-model-build:latest -f pods/model-build/Dockerfile .
+docker push $USER/fraud-det-v3-model-build:latest
 
-# 6. Inference (CPU)
-echo "Building Inference (CPU)..."
-if [ -f "pods/inference/Dockerfile.cpu" ]; then
-    docker build $NO_CACHE -t fraud-det-v3/inference-cpu:latest -f pods/inference/Dockerfile.cpu .
-else
-    echo "Error: pods/inference/Dockerfile.cpu not found!"; exit 1
-fi
-
-# 7. Inference (GPU)
-echo "Building Inference (GPU - Triton Server)..."
-if [ -f "pods/inference/Dockerfile" ]; then
-    docker build $NO_CACHE -t fraud-det-v3/inference-gpu:latest -f pods/inference/Dockerfile .
-else
-    echo "Warning: pods/inference/Dockerfile not found, skipping."
-fi
+# 5. Inference
+echo "Building Inference..."
+docker build $NO_CACHE -t $USER/fraud-det-v3-inference:latest -f pods/inference/Dockerfile .
+docker push $USER/fraud-det-v3-inference:latest
 
 echo "=========================================================="
 echo " Verifying key files in images..."
-docker run --rm fraud-det-v3/data-gather:latest ls -la /app/queue_interface.py /app/config_contract.py /app/gather.py >/dev/null 2>&1 || { echo "ERROR: data-gather image verification failed"; exit 1; }
-docker run --rm fraud-det-v3/preprocessing-cpu:latest ls -la /app/queue_interface.py >/dev/null 2>&1 || true
-docker run --rm fraud-det-v3/backend:latest ls -la /app/backend_server.py /app/k8s_scale.py >/dev/null 2>&1 || true
+docker run --rm $USER/fraud-det-v3-data-gather:latest ls -la /app/queue_interface.py /app/config_contract.py /app/gather.py >/dev/null 2>&1 || { echo "ERROR: data-gather image verification failed"; exit 1; }
 
-echo "Done. All images built successfully."
+echo "Done. All images built and pushed successfully."

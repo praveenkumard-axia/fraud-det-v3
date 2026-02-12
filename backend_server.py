@@ -25,7 +25,7 @@ import uvicorn
 
 # Import queue and config modules
 from queue_interface import get_queue_service
-from k8s_scale import scale_pod, patch_pod_resources
+from k8s_scale import scale_pod, patch_pod_resources, is_k8s_available, LOCAL_MODE
 from metrics_collector import run_one_poll, METRICS_JSON_PATH
 from config_contract import (
     QueueTopics, StoragePaths, ScalingConfig, BacklogThresholds,
@@ -494,6 +494,15 @@ async def start_pipeline(background_tasks: BackgroundTasks):
     if errors:
         return {"success": False, "message": "Some scales failed", "errors": errors}
 
+    # If running locally (no K8s), start the components as sub-processes
+    if not is_k8s_available():
+        print("K8s not detected or LOCAL_MODE=true. Starting components as local sub-processes...")
+        background_tasks.add_task(run_pipeline_sequence)
+        state.reset()
+        state.is_running = True
+        state.start_time = time.time()
+        return {"success": True, "message": "Pipeline started (Local Mode - sub-processes)", "replicas": defaults}
+
     state.reset()
     state.is_running = True
     state.start_time = time.time()
@@ -506,6 +515,16 @@ async def stop_pipeline():
     for pod_key in ["data-gather", "preprocessing-cpu", "inference-cpu", "preprocessing-gpu", "model-build", "inference-gpu"]:
         scale_pod(pod_key, 0)
 
+    # Clean up local processes if any
+    if not is_k8s_available():
+        for name, proc in list(state.processes.items()):
+            print(f"Stopping local pod: {name}")
+            try:
+                proc.terminate()
+                proc.wait(timeout=2)
+            except:
+                proc.kill()
+    
     state.pod_counts["generation"] = 0
     state.pod_counts["preprocessing"] = 0
     state.pod_counts["inference"] = 0
@@ -514,7 +533,7 @@ async def stop_pipeline():
     state.pod_counts["inference_gpu"] = 0
     state.processes.clear()
     state.is_running = False
-    return {"success": True, "message": "Pipeline stopped (K8s pods scaled to 0)"}
+    return {"success": True, "message": "Pipeline stopped"}
 
 
 @app.post("/api/control/reset")

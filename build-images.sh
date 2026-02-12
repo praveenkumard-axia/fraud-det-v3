@@ -7,39 +7,34 @@ echo "=========================================================="
 echo "      Fraud Detection Pipeline - Image Builder"
 echo "=========================================================="
 
+# Tag and Push to Docker Hub
+USER="pduraiswamy16722"
+
 # 1. Backend
-echo "Building Backend..."
-docker build -t fraud-det-v3/backend:latest -f Dockerfile.backend .
+echo "Building and Pushing Backend..."
+docker build -t $USER/fraud-det-v3-dockerfile.backend:latest -f Dockerfile.backend .
+docker push $USER/fraud-det-v3-dockerfile.backend:latest
 
 # 2. Data Gather
-echo "Building Data Gather (Generation)..."
-docker build -t fraud-det-v3/data-gather:latest -f pods/data-gather/Dockerfile .
+echo "Building and Pushing Data Gather..."
+docker build -t $USER/fraud-det-v3-data-gather:latest -f pods/data-gather/Dockerfile .
+docker push $USER/fraud-det-v3-data-gather:latest
 
-# 3. Preprocessing (CPU)
-echo "Building Preprocessing (CPU)..."
-docker build -t fraud-det-v3/preprocessing-cpu:latest -f pods/data-prep/Dockerfile .
+# 3. Preprocessing (CPU/GPU unified in data-prep)
+echo "Building and Pushing Data Prep..."
+docker build -t $USER/fraud-det-v3-data-prep:latest -f pods/data-prep/Dockerfile .
+docker push $USER/fraud-det-v3-data-prep:latest
 
-# 4. Preprocessing (GPU)
-echo "Building Preprocessing (GPU)..."
-# Assuming Dockerfile.gpu exists or using build-args
-if [ -f "pods/data-prep/Dockerfile.gpu" ]; then
-    docker build -t fraud-det-v3/preprocessing-gpu:latest -f pods/data-prep/Dockerfile.gpu .
-else
-    echo "Warning: pods/data-prep/Dockerfile.gpu not found, skipping."
-fi
+# 4. Model Build
+echo "Building and Pushing Model Build..."
+docker build -t $USER/fraud-det-v3-model-build:latest -f pods/model-build/Dockerfile .
+docker push $USER/fraud-det-v3-model-build:latest
 
-# 5. Model Build (GPU/CPU)
-echo "Building Model Build..."
-docker build -t fraud-det-v3/model-build:latest -f pods/model-build/Dockerfile .
-
-# 6. Inference (CPU)
-echo "Building Inference (CPU)..."
-docker build -t fraud-det-v3/inference-cpu:latest -f pods/inference/Dockerfile.cpu .
-
-# 7. Inference (GPU)
-echo "Building Inference (GPU)..."
-docker build -t fraud-det-v3/inference-gpu:latest -f pods/inference/Dockerfile .
+# 5. Inference
+echo "Building and Pushing Inference..."
+docker build -t $USER/fraud-det-v3-inference:latest -f pods/inference/Dockerfile .
+docker push $USER/fraud-det-v3-inference:latest
 
 echo "=========================================================="
-echo "                     Build Complete!"
+echo "               Build & Push Complete!"
 echo "=========================================================="

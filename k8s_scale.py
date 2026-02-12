@@ -5,20 +5,31 @@ Uses subprocess to run kubectl scale. Call this from backend/dashboard when scal
 
 import json
 import subprocess
+import os
 from typing import Optional, Tuple
 
 NAMESPACE = "fraud-det-v3"
+LOCAL_MODE = os.getenv("LOCAL_MODE", "false").lower() in ("true", "1", "yes")
+
+def is_k8s_available() -> bool:
+    """Check if kubectl is installed and reachable, unless in LOCAL_MODE."""
+    if LOCAL_MODE:
+        return False
+    try:
+        # Quick check for client version
+        res = subprocess.run(["kubectl", "version", "--client"], capture_output=True, timeout=5)
+        return res.returncode == 0
+    except (FileNotFoundError, Exception):
+        return False
 
 # K8s deployment names in namespace fraud-det-v3 (must match your manifests)
-# Pod 1: generation (CPU) | Pod 2: preprocessing CPU | Pod 3: preprocessing GPU
-# Pod 4: model-build (GPU) | Pod 5: inference CPU | Pod 6: inference GPU
 DEPLOYMENT_NAMES = {
-    "data-gather": "data-gather",           # Pod 1 - generation
-    "preprocessing-cpu": "preprocessing-cpu",   # Pod 2
-    "preprocessing-gpu": "preprocessing-gpu",   # Pod 3
-    "model-build": "model-build",            # Pod 4 - training
-    "inference-cpu": "inference-cpu",        # Pod 5
-    "inference-gpu": "inference-gpu",        # Pod 6
+    "data-gather": "data-gather",
+    "preprocessing-cpu": "preprocessing-cpu",
+    "preprocessing-gpu": "preprocessing-gpu",
+    "model-build": "model-build",
+    "inference-cpu": "inference-cpu",
+    "inference-gpu": "inference-gpu",
 }
 
 
@@ -57,6 +68,10 @@ def scale_deployment(deployment_name: str, replicas: int) -> Tuple[bool, str]:
     """
     if replicas < 0:
         return False, "replicas must be >= 0"
+    
+    if not is_k8s_available():
+        return True, f"[Simulated] Scaled {deployment_name} to {replicas}"
+
     cmd = [
         "kubectl", "scale", f"deployment/{deployment_name}",
         "--replicas", str(replicas),
@@ -112,6 +127,9 @@ def patch_pod_resources(
     deployment_name = DEPLOYMENT_NAMES.get(pod_key)
     if not deployment_name:
         return False, f"unknown pod_key: {pod_key}"
+
+    if not is_k8s_available():
+        return True, f"[Simulated] Resized {pod_key} CPU={cpu_limit} memory={memory_limit}"
 
     # CPU: "4" = 4 cores (K8s accepts); "4000m" = 4000 millicores. Pass through as-is.
     # Memory: ensure unit (Gi/Mi)
@@ -187,6 +205,11 @@ def get_deployment_resources() -> dict:
     Fetch CPU and Memory limits/requests for all deployments in the namespace.
     Returns {deployment_name: {cpu_limit: str, mem_limit: str, cpu_request: str, mem_request: str}}
     """
+    if not is_k8s_available():
+        # Return mock data for Local Mode so the UI doesn't look empty
+        return {name: {"cpu_limit": "2", "mem_limit": "4Gi", "cpu_request": "1", "mem_request": "2Gi"} 
+                for name in DEPLOYMENT_NAMES.values()}
+
     cmd = ["kubectl", "get", "deployments", "-n", NAMESPACE, "-o", "json"]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)

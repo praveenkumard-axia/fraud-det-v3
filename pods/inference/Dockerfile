@@ -18,9 +18,8 @@ COPY queue_interface.py config_contract.py ./
 COPY pods/inference/client.py ./
 
 # Set environment variables
-ENV FA_MOUNT=/root/ebiser/nvidia.financial.fraud.detection
-ENV MODEL_REPOSITORY=/root/ebiser/nvidia.financial.fraud.detection/model_repository
-ENV NOTIFICATION_ENDPOINT=http://notification:5000/notify/fraud
+# Set default environment variables (overridden by K8s)
+ENV MODEL_REPOSITORY=/mnt/cpu-fb/models
 ENV PYTHONUNBUFFERED=1
 ENV CUDA_VISIBLE_DEVICES=0,1
 
@@ -28,7 +27,4 @@ ENV CUDA_VISIBLE_DEVICES=0,1
 EXPOSE 8000 8001 8002
 
 # Start Triton Inference Server
-CMD ["tritonserver", \
-    "--model-repository=${MODEL_REPOSITORY}", \
-    "--strict-model-config=false", \
-    "--log-verbose=1"]
+CMD ["sh", "-c", "tritonserver --model-repository=${MODEL_REPOSITORY} --strict-model-config=false --log-verbose=1"]
