@@ -528,7 +528,7 @@ async def start_pipeline(background_tasks: BackgroundTasks):
 
     # Scale all deployments (CPU + GPU) to defaults
     # Scale deployments based on CONFIG_MODE (cpu or gpu)
-    config_mode = os.getenv("CONFIG_MODE", "cpu").lower()
+    config_mode = os.getenv("CONFIG_MODE", "dual").lower()
     
     defaults = {}
     # Common deployments
