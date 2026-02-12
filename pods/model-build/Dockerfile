@@ -5,10 +5,13 @@ FROM nvcr.io/nvidia/rapidsai/base:24.02-cuda12.0-py3.10
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir xgboost>=2.0.0
+# Copy requirements first (for better layer caching)
+COPY pods/model-build/requirements.txt ./requirements.txt
 
-RUN pip install -r requirements.txt
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy application files
 COPY queue_interface.py config_contract.py ./
 COPY pods/model-build/train.py ./
 

@@ -8,7 +8,8 @@ RUN pip install --no-cache-dir \
     xgboost>=2.0.0 \
     numpy>=1.24.0 \
     psutil \
-    polars \
+    polars>=0.20.0 \
+    pyarrow>=12.0.0 \
     "tritonclient[all]>=2.34.0"
 
 COPY queue_interface.py config_contract.py ./
