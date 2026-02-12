@@ -49,11 +49,12 @@ _last_fb_stats = {
 }
 
 def _get_dir_size(path: Path) -> int:
-    """Calculate total size of files in a directory (non-recursive for speed)."""
+    """Calculate total size of files in a directory (recursive to capture run_TIMESTAMP subdirs)."""
     try:
         if not path.exists():
             return 0
-        return sum(f.stat().st_size for f in path.iterdir() if f.is_file())
+        # Recursive glob to find all files in subdirectories
+        return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
     except Exception:
         return 0
 

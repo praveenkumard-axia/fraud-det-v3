@@ -120,12 +120,12 @@ class ScalingConfig:
         "preprocessing-gpu": {
             "min_replicas": 0,
             "max_replicas": 1,
-            "default_replicas": 0
+            "default_replicas": 1
         },
         "inference-gpu": {
             "min_replicas": 0,
             "max_replicas": 1,
-            "default_replicas": 0
+            "default_replicas": 1
         }
     }
     

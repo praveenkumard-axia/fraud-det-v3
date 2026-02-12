@@ -248,7 +248,7 @@ spec:
           imagePullPolicy: Always
           env:
             - name: FLASHBLADE_PATH
-              value: "/mnt/gpu-fb"
+              value: "/mnt/cpu-fb"
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
@@ -260,6 +260,8 @@ spec:
             - name: PYTHONUNBUFFERED
               value: "1"
           volumeMounts:
+            - name: cpu-fb
+              mountPath: /mnt/cpu-fb
             - name: gpu-fb
               mountPath: /mnt/gpu-fb
           resources:
@@ -272,6 +274,9 @@ spec:
               memory: "32Gi"
               nvidia.com/gpu: "1"
       volumes:
+        - name: cpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-det-v3-cpu-fb
         - name: gpu-fb
           persistentVolumeClaim:
             claimName: fraud-det-v3-gpu-fb
@@ -429,7 +434,7 @@ spec:
               name: metrics
           env:
             - name: FLASHBLADE_PATH
-              value: "/mnt/gpu-fb"
+              value: "/mnt/cpu-fb"
             - name: QUEUE_TYPE
               value: "flashblade"
             - name: INPUT_PATH
@@ -441,6 +446,8 @@ spec:
             - name: PYTHONUNBUFFERED
               value: "1"
           volumeMounts:
+            - name: cpu-fb
+              mountPath: /mnt/cpu-fb
             - name: gpu-fb
               mountPath: /mnt/gpu-fb
           resources:
@@ -453,6 +460,9 @@ spec:
               memory: "32Gi"
               nvidia.com/gpu: "1"
       volumes:
+        - name: cpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-det-v3-cpu-fb
         - name: gpu-fb
           persistentVolumeClaim:
             claimName: fraud-det-v3-gpu-fb

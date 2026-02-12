@@ -7,6 +7,8 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir xgboost>=2.0.0
 
+RUN pip install -r requirements.txt
+
 COPY queue_interface.py config_contract.py ./
 COPY pods/model-build/train.py ./
 

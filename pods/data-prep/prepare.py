@@ -306,6 +306,9 @@ class DataPrepService:
                 log(f"Processed: {total_processed:,} | Throughput: {throughput:,.0f} rows/sec")
                 log_telemetry(total_processed, throughput, elapsed, cpu_cores, mem_gb, mem_info.percent)
                 
+                # Update global metrics for dashboard fallback
+                self.queue_service.increment_metric("total_txns_scored", len(messages))
+                
             except Exception as e:
                 log(f"Error in continuous processing: {e}")
                 time.sleep(1)

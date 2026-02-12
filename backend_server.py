@@ -280,6 +280,83 @@ def run_pod_async(pod_name: str, script_path: str):
             del state.processes[pod_name]
 
 
+async def _tail_pod_logs(pod_name: str):
+    """Tail logs for a single K8s pod and parse telemetry."""
+    from k8s_scale import NAMESPACE
+    print(f"Started tailing logs for K8s pod: {pod_name}")
+    
+    try:
+        process = await asyncio.create_subprocess_exec(
+            "kubectl", "logs", "-f", pod_name, "-n", NAMESPACE, "--tail=10",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT
+        )
+        
+        while True:
+            line = await process.stdout.readline()
+            if not line:
+                break
+            
+            line_str = line.decode().strip()
+            telemetry = parse_telemetry_line(line_str)
+            if telemetry:
+                state.update_telemetry(
+                    stage=telemetry.get("stage", "Unknown"),
+                    status=telemetry.get("status", "Running"),
+                    rows=telemetry.get("rows", 0),
+                    throughput=telemetry.get("throughput", 0),
+                    elapsed=telemetry.get("elapsed", 0.0),
+                    cpu_percent=telemetry.get("cpu_cores", 0.0),
+                    ram_percent=telemetry.get("ram_percent", 0.0)
+                )
+    except Exception as e:
+        print(f"Error tailing logs for {pod_name}: {e}")
+    finally:
+        print(f"Stopped tailing logs for K8s pod: {pod_name}")
+
+
+async def _k8s_telemetry_loop():
+    """Background task to discover and tail logs from K8s pods."""
+    from k8s_scale import NAMESPACE
+    
+    tailing_pods = set()
+    
+    while True:
+        try:
+            if not state.is_running or not is_k8s_available() or LOCAL_MODE:
+                await asyncio.sleep(5)
+                continue
+            
+            # Get running pods from our deployments
+            process = await asyncio.create_subprocess_exec(
+                "kubectl", "get", "pods", "-n", NAMESPACE,
+                "--field-selector=status.phase=Running",
+                "-o", "jsonpath={range .items[*]}{.metadata.name} {.metadata.labels.app}{\"\\n\"}{end}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await process.communicate()
+            
+            if process.returncode == 0:
+                lines = stdout.decode().strip().split("\n")
+                for line in lines:
+                    if not line: continue
+                    parts = line.split()
+                    if len(parts) < 2: continue
+                    pod_name, app_name = parts[0], parts[1]
+                    
+                    if app_name in ["data-gather", "preprocessing-cpu", "inference-cpu", "preprocessing-gpu", "model-build", "inference-gpu"]:
+                        if pod_name not in tailing_pods:
+                            tailing_pods.add(pod_name)
+                            task = asyncio.create_task(_tail_pod_logs(pod_name))
+                            task.add_done_callback(lambda t, p=pod_name: tailing_pods.discard(p))
+                            
+        except Exception as e:
+            print(f"K8s telemetry loop error: {e}")
+            
+        await asyncio.sleep(10)
+
+
 def run_pipeline_sequence():
     """Run all 4 pods in sequence"""
     state.is_running = True
@@ -1326,6 +1403,7 @@ async def _metrics_poll_loop():
 async def start_metrics_poller():
     """Start the 1s metrics collector loop."""
     asyncio.create_task(_metrics_poll_loop())
+    asyncio.create_task(_k8s_telemetry_loop())
 
 
 @app.websocket("/data/dashboard")

@@ -128,6 +128,9 @@ class ModelTrainer:
         log.info(f"Training Interval: {self.training_interval}s")
         log.info(f"Min Samples: {self.min_samples_for_training:,}")
         log.info("=" * 70)
+        
+        # NEW: Queue service for business metrics
+        self.queue_service = get_queue_service()
 
     def check_system_priority(self) -> str:
         """Check system priority from backend API"""
@@ -483,6 +486,9 @@ parameters [
                 throughput = total_samples / elapsed if elapsed > 0 else 0
                 log_telemetry(total_samples, throughput, elapsed, cpu_cores, mem_gb, mem.percent, 
                             status=f"Model v{version} trained")
+                
+                # Update global metrics for dashboard fallback
+                self.queue_service.increment_metric("total_txns_scored", total_samples)
                 
             except Exception as e:
                 log.error(f"Error in continuous training: {e}")
