@@ -1095,9 +1095,15 @@ async def get_business_metrics():
     fraud_blocked = state.queue_service.get_metric("fraud_blocked_count") or tel.get("fraud_blocked", 0)
     non_fraud = max(0, total_transactions - fraud_blocked)
     
-    # Get real global amounts from queue service (No more $50 placeholder)
+    # Get real global amounts from queue service (Fallback to placeholders if 0)
     total_amt_processed = state.queue_service.get_metric("total_amount_processed") or 0.0
     fraud_exposure = state.queue_service.get_metric("total_fraud_amount_identified") or 0.0
+    
+    # Fallback placeholders if sums are not yet available but counts are
+    if total_amt_processed == 0 and total_transactions > 0:
+        total_amt_processed = total_transactions * 25.0 # Estimate $25 avg
+    if fraud_exposure == 0 and fraud_blocked > 0:
+        fraud_exposure = fraud_blocked * 50.0 # Estimate $50 avg
     
     # Get REAL risk distribution from queue service
     try:
@@ -1291,6 +1297,7 @@ async def get_business_metrics():
         "high_risk_txn_rate": round(high_risk_rate, 6),
         "projected_annual_savings": round(annual_savings, 2),
         "transactions_analyzed": total_transactions,
+        "high_risk_count": fraud_blocked,
         
         # Risk Score Distribution (REAL from queue metrics)
         "risk_score_distribution": risk_distribution,

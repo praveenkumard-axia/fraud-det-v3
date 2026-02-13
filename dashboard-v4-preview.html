@@ -845,7 +845,30 @@
       background: var(--border);
       margin: 10px 0;
     }
+
+    /* ── Throughput Chart Container ── */
+    .throughput-chart-wrapper {
+      background: var(--bg-card);
+      border-radius: 6px;
+      padding: 16px;
+      margin-top: 16px;
+      border: 1px solid var(--border);
+    }
+
+    .chart-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    #throughput-trend-chart {
+      max-height: 250px;
+    }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
 </head>
 
 <body>
@@ -1515,6 +1538,12 @@
               Combined: <span style="color: var(--orange); margin: 0 6px;" id="throughput-combined">357K TPS</span> at
               <span style="color: var(--blue); margin: 0 6px;" id="throughput-latency">12ms</span> latency
             </div>
+
+            <!-- Throughput Trend Chart -->
+            <div class="throughput-chart-wrapper">
+              <div class="chart-title">Throughput Values Over Time</div>
+              <canvas id="throughput-trend-chart"></canvas>
+            </div>
           </div>
 
         </div>
@@ -1535,31 +1564,21 @@
               <span class="card-title">Machine Metrics</span>
               <span class="card-badge" style="background: var(--purple-dim); color: var(--purple);">Prometheus</span>
             </div>
-            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 12px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px;">
               <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--blue);"
+                <div style="font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--blue);"
                   id="mm-cpu">0</div>
-                <div style="font-size: 8px; color: var(--text-muted);">CPU TPS</div>
+                <div style="font-size: 10px; color: var(--text-muted);">CPU txns/s</div>
               </div>
               <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--green);"
+                <div style="font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--green);"
                   id="mm-gpu">0</div>
-                <div style="font-size: 8px; color: var(--text-muted);">GPU TPS</div>
+                <div style="font-size: 10px; color: var(--text-muted);">GPU txns/s</div>
               </div>
               <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--orange);"
+                <div style="font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--orange);"
                   id="mm-fb">0</div>
-                <div style="font-size: 8px; color: var(--text-muted);">FB MB/s</div>
-              </div>
-              <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--purple);"
-                  id="mm-node-cpu">0%</div>
-                <div style="font-size: 8px; color: var(--text-muted);">Node CPU</div>
-              </div>
-              <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--purple);"
-                  id="mm-node-ram">0%</div>
-                <div style="font-size: 8px; color: var(--text-muted);">Node RAM</div>
+                <div style="font-size: 10px; color: var(--text-muted);">FB MB/s</div>
               </div>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
@@ -1884,15 +1903,6 @@
       if (document.getElementById('fb-util')) document.getElementById('fb-util').textContent = fbUtil + '%';
       if (document.getElementById('fb-util-bar')) document.getElementById('fb-util-bar').style.width = Math.min(100, fbUtil) + '%';
 
-      // Update Node CPU/RAM from Infra
-      const nodeStatus = (data.infra && data.infra.node) ? data.infra.node : {};
-      if (document.getElementById('mm-node-cpu') && nodeStatus.cpu_percent != null) {
-        document.getElementById('mm-node-cpu').textContent = nodeStatus.cpu_percent.toFixed(1) + '%';
-      }
-      if (document.getElementById('mm-node-ram') && nodeStatus.ram_percent != null) {
-        document.getElementById('mm-node-ram').textContent = nodeStatus.ram_percent.toFixed(1) + '%';
-      }
-
       // Update Fraud Velocity badge from KPIs
       const fraudVelocity = kpis['11_fraud_velocity_per_min'];
       if (document.getElementById('velocity-badge') && fraudVelocity != null) {
@@ -1915,6 +1925,12 @@
     function updateBusinessMetrics(b) {
       if (!b) return;
       const el = (id) => document.getElementById(id);
+
+      // Update Top KPI Bar from polled data
+      if (el('kpi-fraud-usd')) el('kpi-fraud-usd').textContent = fmtUsd(b.fraud_exposure_identified);
+      if (el('kpi-txns-analyzed')) el('kpi-txns-analyzed').textContent = fmtNum(b.transactions_analyzed || 0);
+      if (el('kpi-high-risk')) el('kpi-high-risk').textContent = fmtNum(b.high_risk_count || 0);
+
       if (el('kpi-fraud-exposure')) el('kpi-fraud-exposure').textContent = fmtUsd(b.fraud_exposure_identified);
       if (el('kpi-fraud-rate')) el('kpi-fraud-rate').textContent = (Number(b.fraud_rate || 0) * 100).toFixed(2) + '%';
       if (el('kpi-alerts')) el('kpi-alerts').textContent = fmtNum(b.alerts_per_million || 0);
@@ -2067,11 +2083,6 @@
         const model = j.Model || {};
         const ml = model.ml_details || {};
         const metadata = model.metadata || {};
-        const infra = j.infra || {};
-        const node = infra.node || {};
-
-        if (el('mm-node-cpu') && node.cpu_percent != null) el('mm-node-cpu').textContent = node.cpu_percent.toFixed(1) + '%';
-        if (el('mm-node-ram') && node.ram_percent != null) el('mm-node-ram').textContent = node.ram_percent.toFixed(1) + '%';
 
         // Calculate throughput from Model data if direct metrics are 0
         // Use transactions_analyzed and elapsed time to estimate TPS
@@ -2141,7 +2152,11 @@
         if (el('throughput-combined')) el('throughput-combined').textContent = fmtNum(combinedTPS) + ' TPS';
         if (el('throughput-latency')) el('throughput-latency').textContent = latencyMs.toFixed(0) + 'ms';
 
+        // Update Throughput Trend Chart
+        updateThroughputTrendChart(cpuTPS, gpuTPS, combinedTPS);
+
         // Update Infra Allocation display
+        const infra = j.infra || {};
         const alloc = infra.allocation || {};
         const infraList = el('infra-allocation-list');
         if (infraList && Object.keys(alloc).length > 0) {
@@ -2215,11 +2230,180 @@
     }
     function startMachinePoll() {
       if (machinePollTimer) clearInterval(machinePollTimer);
+      initThroughputTrendChart();
       fetchMachineMetrics();
       machinePollTimer = setInterval(fetchMachineMetrics, 5000);
     }
     function stopMachinePoll() {
       if (machinePollTimer) { clearInterval(machinePollTimer); machinePollTimer = null; }
+    }
+
+    // ==================== THROUGHPUT CHART ====================
+    let throughputTrendChart = null;
+    const trendChartData = {
+      timestamps: [],
+      cpuTPS: [],
+      gpuTPS: [],
+      combinedTPS: []
+    };
+
+    function initThroughputTrendChart() {
+      const chartEl = document.getElementById('throughput-trend-chart');
+      if (!chartEl) return;
+
+      if (throughputTrendChart) {
+        throughputTrendChart.destroy();
+      }
+
+      throughputTrendChart = new Chart(chartEl, {
+        type: 'line',
+        data: {
+          labels: trendChartData.timestamps,
+          datasets: [
+            {
+              label: 'CPU Path TPS',
+              data: trendChartData.cpuTPS,
+              borderColor: '#3b82f6',
+              backgroundColor: 'rgba(59, 130, 246, 0.1)',
+              tension: 0.3,
+              borderWidth: 2,
+              pointRadius: 3,
+              pointBackgroundColor: '#3b82f6',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 1,
+              fill: true
+            },
+            {
+              label: 'GPU Path TPS',
+              data: trendChartData.gpuTPS,
+              borderColor: '#22c55e',
+              backgroundColor: 'rgba(34, 197, 94, 0.1)',
+              tension: 0.3,
+              borderWidth: 2,
+              pointRadius: 3,
+              pointBackgroundColor: '#22c55e',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 1,
+              fill: true
+            },
+            {
+              label: 'Combined TPS',
+              data: trendChartData.combinedTPS,
+              borderColor: '#fe5000',
+              backgroundColor: 'rgba(254, 80, 0, 0.1)',
+              tension: 0.3,
+              borderWidth: 2,
+              pointRadius: 3,
+              pointBackgroundColor: '#fe5000',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 1,
+              fill: true
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: true,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              labels: {
+                color: '#f1f5f9',
+                font: { size: 11, weight: '600', family: "'DM Sans', sans-serif" },
+                padding: 12,
+                usePointStyle: true,
+                pointStyle: 'circle'
+              }
+            },
+            tooltip: {
+              backgroundColor: 'rgba(10, 14, 23, 0.95)',
+              titleColor: '#f1f5f9',
+              bodyColor: '#f1f5f9',
+              borderColor: 'rgba(255, 255, 255, 0.1)',
+              borderWidth: 1,
+              padding: 10,
+              titleFont: { size: 12, weight: '600' },
+              bodyFont: { size: 11, family: "'JetBrains Mono', monospace" },
+              callbacks: {
+                label: function (context) {
+                  let label = context.dataset.label || '';
+                  if (label) label += ': ';
+                  if (context.parsed.y !== null) {
+                    label += context.parsed.y.toLocaleString() + ' TPS';
+                  }
+                  return label;
+                }
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: {
+                color: 'rgba(255, 255, 255, 0.06)',
+                drawBorder: false
+              },
+              ticks: {
+                color: '#94a3b8',
+                font: { size: 10, family: "'JetBrains Mono', monospace" },
+                callback: function (value) {
+                  if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+                  if (value >= 1000) return (value / 1000).toFixed(0) + 'K';
+                  return value;
+                }
+              }
+            },
+            x: {
+              grid: {
+                display: false,
+                drawBorder: false
+              },
+              ticks: {
+                color: '#94a3b8',
+                font: { size: 9, family: "'JetBrains Mono', monospace" },
+                maxTicksLimit: 12
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function updateThroughputTrendChart(cpuTPS, gpuTPS, combinedTPS) {
+      if (!throughputTrendChart) {
+        initThroughputTrendChart();
+        if (!throughputTrendChart) return;
+      }
+
+      const now = new Date();
+      const timeStr = now.getHours().toString().padStart(2, '0') + ':' +
+        now.getMinutes().toString().padStart(2, '0');
+
+      // Keep last 20 data points
+      if (trendChartData.timestamps.length >= 20) {
+        trendChartData.timestamps.shift();
+        trendChartData.cpuTPS.shift();
+        trendChartData.gpuTPS.shift();
+        trendChartData.combinedTPS.shift();
+      }
+
+      trendChartData.timestamps.push(timeStr);
+      trendChartData.cpuTPS.push(Math.round(cpuTPS || 0));
+      trendChartData.gpuTPS.push(Math.round(gpuTPS || 0));
+      trendChartData.combinedTPS.push(Math.round(combinedTPS || 0));
+
+      if (throughputTrendChart) {
+        throughputTrendChart.data.labels = trendChartData.timestamps;
+        throughputTrendChart.data.datasets[0].data = trendChartData.cpuTPS;
+        throughputTrendChart.data.datasets[1].data = trendChartData.gpuTPS;
+        throughputTrendChart.data.datasets[2].data = trendChartData.combinedTPS;
+        throughputTrendChart.update('none');
+      }
     }
 
     function connectWS() {
