@@ -103,16 +103,35 @@ def collect_metrics(
     """
     ts = time.time()
     pod_top = _kubectl_top_pods(namespace)
+    prom = fetch_prometheus_metrics()
 
-    # CPU: from kubectl top when available; else fallback to telemetry cpu_percent
-    cpu_util = sum(p.get("cpu_millicores", 0) for p in pod_top)
-    if cpu_util == 0 and pod_top == []:
-        cpu_pct = telemetry.get("cpu_percent", 0) or 0
-        cpu_util = int(cpu_pct * 10)
+    # CPU Utilization
+    # 1. Try Node Exporter (Cluster level)
+    # 2. Try kubectl top (Pod level sum)
+    # 3. Fallback to telemetry
+    cpu_util_millicores = sum(p.get("cpu_millicores", 0) for p in pod_top)
+    node_cpu_pct = prom.get("node_cpu_percent")
+    
+    if node_cpu_pct is not None:
+        cpu_util_pct = node_cpu_pct
+    else:
+        # Fallback to sum of millicores vs total limit (approx 41 cores in manifest)
+        total_cores_limit = 41.0
+        cpu_util_pct = (cpu_util_millicores / (total_cores_limit * 1000.0)) * 100.0 if cpu_util_millicores > 0 else 0
+        
     cpu_throughput = telemetry.get("throughput", 0)
-    cpu_point = {"t": round(ts, 1), "util_millicores": cpu_util, "throughput": cpu_throughput}
+    cpu_point = {
+        "t": round(ts, 1), 
+        "util_millicores": cpu_util_millicores, 
+        "util_pct": round(cpu_util_pct, 2),
+        "throughput": cpu_throughput
+    }
 
-    # GPU Utilization (placeholder until we have DCGM or similar)
+    # RAM Utilization
+    node_ram_pct = prom.get("node_ram_percent")
+    ram_util_mib = sum(p.get("mem_mib", 0) for p in pod_top)
+    
+    # GPU Utilization
     gpu_util = telemetry.get("gpu_util", 0)
     gpu_throughput = int(cpu_throughput * 0.7)  # Simulated split
     gpu_point = {"t": round(ts, 1), "util": gpu_util, "throughput": gpu_throughput}
@@ -142,9 +161,10 @@ def collect_metrics(
         gpu_tp_mbps = max(0.0, gpu_tp_mbps)
     _last_fb_stats["gpu"] = {"ts": ts, "bytes": gpu_bytes}
 
-    # Prometheus Fallback/Merge
-    prom = fetch_prometheus_metrics()
+    # Prometheus Fallback/Merge (Storage)
     latency_ms = prom.get("latency_ms", 12.0)
+    fb_read_mbps = prom.get("fb_read_mbps", cpu_tp_mbps)
+    fb_write_mbps = prom.get("fb_write_mbps", gpu_tp_mbps)
 
     # Pure1: Only if enabled
     pure1 = {}
@@ -155,16 +175,16 @@ def collect_metrics(
     except ImportError:
         pass
 
-    # FB Points for series (combined for backward compatibility, but we provide granular too)
+    # FB Points for series
     fb_cpu_point = {
         "t": round(ts, 1),
         "util": pure1.get("util_pct", 0),
-        "throughput_mbps": round(cpu_tp_mbps, 2),
+        "throughput_mbps": round(fb_read_mbps, 2),
     }
     fb_gpu_point = {
         "t": round(ts, 1),
         "util": pure1.get("util_pct", 0),
-        "throughput_mbps": round(gpu_tp_mbps, 2),
+        "throughput_mbps": round(fb_write_mbps, 2),
     }
 
     # Business from telemetry + queue
@@ -182,6 +202,8 @@ def collect_metrics(
         "3_high_risk_flagged": fraud_blocked,
         "4_decision_latency_ms": round(latency_ms, 2),
         "17_flashblade_util_pct": pure1.get("util_pct", 0),
+        "node_cpu_pct": round(node_cpu_pct, 1) if node_cpu_pct else 0,
+        "node_ram_pct": round(node_ram_pct, 1) if node_ram_pct else 0,
     }
 
     # Resource Allocation (Infra request/limit)
@@ -194,14 +216,18 @@ def collect_metrics(
         "fb_gpu": [fb_gpu_point],
         "fb": [fb_cpu_point], # Fallback for old UI
         "storage": {
-            "cpu_mbps": round(cpu_tp_mbps, 2),
-            "gpu_mbps": round(gpu_tp_mbps, 2),
+            "cpu_mbps": round(fb_read_mbps, 2),
+            "gpu_mbps": round(fb_write_mbps, 2),
             "latency_ms": latency_ms
         },
         "kpis": kpis,
         "infra": {
             "pods": pod_top,
-            "allocation": res_alloc
+            "allocation": res_alloc,
+            "node": {
+                "cpu_percent": node_cpu_pct,
+                "ram_percent": node_ram_pct
+            }
         },
         "business": {
             "no_of_generated": generated,

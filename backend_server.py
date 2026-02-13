@@ -68,7 +68,7 @@ class ThrottleRequest(BaseModel):
 class ScaleConfig(BaseModel):
     preprocessing_pods: int = 1
     training_pods: int = 1
-    inference_pods: int = 2
+    inference_pods: int = 1
     generation_rate: int = 50000
 
 
@@ -114,10 +114,10 @@ class PipelineState:
         self.pod_counts = {
             "preprocessing": 1,
             "training": 1,
-            "inference": 2,
+            "inference": 1,
             "generation": 1,
-            "preprocessing_gpu": 0,
-            "inference_gpu": 0,
+            "preprocessing_gpu": 1,
+            "inference_gpu": 1,
         }
         
         # Queue service
@@ -1512,7 +1512,7 @@ async def websocket_dashboard(websocket: WebSocket):
                 await websocket.send_json(data)
             except Exception as e:
                 print(f"Dashboard WS read/send error: {e}")
-            await asyncio.sleep(1.2)
+            await asyncio.sleep(1.0)
     except WebSocketDisconnect:
         print("Dashboard WebSocket client disconnected")
     except Exception as e:

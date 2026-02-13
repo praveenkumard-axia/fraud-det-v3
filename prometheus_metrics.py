@@ -77,10 +77,22 @@ def fetch_prometheus_metrics() -> Dict[str, Any]:
     util_q = os.getenv("PROMETHEUS_UTIL_QUERY", "100")  # e.g. flashblade_util_percent
     latency_q = os.getenv("PROMETHEUS_LATENCY_QUERY", "0")  # e.g. histogram_quantile
 
+    # Node Exporter CPU/Mem Metrics
+    node_cpu_q = os.getenv(
+        "PROMETHEUS_NODE_CPU_QUERY",
+        "100 - (avg(rate(node_cpu_seconds_total{mode='idle'}[1m])) * 100)"
+    )
+    node_mem_q = os.getenv(
+        "PROMETHEUS_NODE_MEM_QUERY",
+        "((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes) * 100"
+    )
+
     read_mbps = _prometheus_query(url, read_q)
     write_mbps = _prometheus_query(url, write_q)
     util_pct = _prometheus_query(url, util_q) if util_q else None
     latency_ms = _prometheus_query(url, latency_q) if latency_q else None
+    node_cpu_pct = _prometheus_query(url, node_cpu_q)
+    node_mem_pct = _prometheus_query(url, node_mem_q)
 
     # FlashBlade-specific if provided and PURE_SERVER=true; else use node_disk (local disk) metrics
     pure_server = os.getenv("PURE_SERVER", "false").strip().lower() in ("true", "1", "yes")
@@ -96,5 +108,7 @@ def fetch_prometheus_metrics() -> Dict[str, Any]:
         "latency_ms": round(latency_ms, 2) if latency_ms is not None else None,
         "fb_read_mbps": round(fb_read, 2) if fb_read is not None else None,
         "fb_write_mbps": round(fb_write, 2) if fb_write is not None else None,
+        "node_cpu_percent": round(node_cpu_pct, 2) if node_cpu_pct is not None else None,
+        "node_ram_percent": round(node_mem_pct, 2) if node_mem_pct is not None else None,
     }
     return {k: v for k, v in out.items() if v is not None}
