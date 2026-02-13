@@ -926,7 +926,7 @@
       <span class="tab-icon">📊</span>Business Intelligence
     </div>
     <div class="tab" onclick="switchTab('tech')">
-      <span class="tab-icon">⚙️</span>Technology &amp; Infrastructure
+      <span class="tab-icon">⚙️</span>Technology & Infrastructure
     </div>
   </div>
 
@@ -1450,99 +1450,7 @@
             </div>
           </div>
 
-          <!-- Architecture: Vertical Scaling -->
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">Architecture — Single-Consumer with Parallel Workers</span>
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px; padding: 12px 0;">
-              <!-- Generator -->
-              <div
-                style="background: var(--bg-card); border-radius: 6px; padding: 12px; text-align: center; min-width: 80px;">
-                <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Source</div>
-                <div style="font-size: 12px; font-weight: 600; margin-top: 4px;">Generator</div>
-                <div style="font-size: 10px; color: var(--purple); font-family: var(--mono);">100K/s</div>
-              </div>
-              <div style="color: var(--orange); font-size: 16px;">→</div>
-              <!-- FlashBlade 1 -->
-              <div style="background: var(--orange); border-radius: 6px; padding: 10px 14px; text-align: center;">
-                <div style="font-size: 9px; color: rgba(255,255,255,0.7); text-transform: uppercase;">Storage</div>
-                <div style="font-size: 12px; font-weight: 700; color: #fff;">FlashBlade</div>
-                <div style="font-size: 9px; color: rgba(255,255,255,0.8);">/raw/</div>
-              </div>
-              <div style="color: var(--orange); font-size: 16px;">→</div>
-              <!-- Prep Pod -->
-              <div
-                style="background: var(--bg-card); border: 2px solid var(--orange); border-radius: 6px; padding: 10px 12px; text-align: center;">
-                <div style="font-size: 9px; color: var(--orange); text-transform: uppercase; font-weight: 600;">Prep Pod
-                </div>
-                <div style="display: flex; gap: 3px; margin: 6px 0; justify-content: center;">
-                  <div
-                    style="background: var(--orange); border-radius: 2px; padding: 3px 5px; font-size: 8px; color: #fff; font-weight: 600;">
-                    W1</div>
-                  <div
-                    style="background: var(--orange); border-radius: 2px; padding: 3px 5px; font-size: 8px; color: #fff; font-weight: 600;">
-                    W2</div>
-                  <div
-                    style="background: var(--orange); border-radius: 2px; padding: 3px 5px; font-size: 8px; color: #fff; font-weight: 600;">
-                    W3</div>
-                  <div
-                    style="background: var(--orange); border-radius: 2px; padding: 3px 5px; font-size: 8px; color: #fff; font-weight: 600;">
-                    W4</div>
-                </div>
-                <div style="font-size: 9px; color: var(--text-muted);">single reader → parallel</div>
-              </div>
-              <div style="color: var(--orange); font-size: 16px;">→</div>
-              <!-- FlashBlade 2 -->
-              <div style="background: var(--orange); border-radius: 6px; padding: 10px 14px; text-align: center;">
-                <div style="font-size: 9px; color: rgba(255,255,255,0.7); text-transform: uppercase;">Storage</div>
-                <div style="font-size: 12px; font-weight: 700; color: #fff;">FlashBlade</div>
-                <div style="font-size: 9px; color: rgba(255,255,255,0.8);">/features/</div>
-              </div>
-              <div style="color: var(--orange); font-size: 16px;">→</div>
-              <!-- Inference Pod -->
-              <div
-                style="background: var(--bg-card); border: 2px solid var(--orange); border-radius: 6px; padding: 10px 12px; text-align: center;">
-                <div style="font-size: 9px; color: var(--orange); text-transform: uppercase; font-weight: 600;">
-                  Inference Pod</div>
-                <div style="display: flex; gap: 3px; margin: 6px 0; justify-content: center;">
-                  <div
-                    style="background: var(--orange); border-radius: 2px; padding: 3px 5px; font-size: 8px; color: #fff; font-weight: 600;">
-                    W1</div>
-                  <div
-                    style="background: var(--orange); border-radius: 2px; padding: 3px 5px; font-size: 8px; color: #fff; font-weight: 600;">
-                    W2</div>
-                  <div
-                    style="background: var(--orange); border-radius: 2px; padding: 3px 5px; font-size: 8px; color: #fff; font-weight: 600;">
-                    W3</div>
-                  <div
-                    style="background: var(--orange); border-radius: 2px; padding: 3px 5px; font-size: 8px; color: #fff; font-weight: 600;">
-                    W4</div>
-                </div>
-                <div style="font-size: 9px; color: var(--text-muted);">CPU cores / GPU streams</div>
-              </div>
-              <div style="color: var(--orange); font-size: 16px;">→</div>
-              <!-- FlashBlade 3 -->
-              <div style="background: var(--orange); border-radius: 6px; padding: 10px 14px; text-align: center;">
-                <div style="font-size: 9px; color: rgba(255,255,255,0.7); text-transform: uppercase;">Storage</div>
-                <div style="font-size: 12px; font-weight: 700; color: #fff;">FlashBlade</div>
-                <div style="font-size: 9px; color: rgba(255,255,255,0.8);">/results/</div>
-              </div>
-              <div style="color: var(--orange); font-size: 16px;">→</div>
-              <!-- Dashboard -->
-              <div
-                style="background: var(--bg-card); border-radius: 6px; padding: 12px; text-align: center; min-width: 80px;">
-                <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Output</div>
-                <div style="font-size: 12px; font-weight: 600; margin-top: 4px;">Dashboard</div>
-                <div style="font-size: 10px; color: var(--green); font-family: var(--mono);">Real-time</div>
-              </div>
-            </div>
-            <div
-              style="background: var(--bg-card); border-left: 3px solid var(--orange); border-radius: 4px; padding: 10px 14px; font-size: 11px; color: var(--text-secondary);">
-              <strong style="color: var(--text-primary);">Vertical scaling:</strong> Add CPU cores or GPU streams within
-              each pod. Single-consumer claims batches atomically — no Kafka, no distributed coordination.
-            </div>
-          </div>
+
 
           <!-- Throughput Performance -->
           <div class="card">
@@ -1557,21 +1465,21 @@
                 <span class="stage-value" style="font-family: var(--mono); font-size: 18px; font-weight: 700;"
                   id="throughput-cpu-val">45K TPS</span>
               </div>
-              <div style="margin-bottom: 8px;">
-                <div class="progress-label"><span style="color: var(--text-muted);">Pandas</span><span>Feature
-                    Eng</span></div>
-                <div class="progress-track">
-                  <div class="progress-fill" id="throughput-cpu-prep-bar" style="width: 35%; background: var(--blue);">
-                  </div>
-                </div>
+              <div class="stage-header">
+                <span class="stage-label" style="color: var(--text-muted); font-size: 11px;">Pandas</span>
+                <span class="stage-value" style="font-size: 11px;">Feature Eng</span>
               </div>
-              <div>
-                <div class="progress-label"><span style="color: var(--text-muted);">XGBoost
-                    CPU</span><span>Inference</span></div>
-                <div class="progress-track">
-                  <div class="progress-fill" id="throughput-cpu-infer-bar" style="width: 14%; background: var(--blue);">
-                  </div>
-                </div>
+              <div class="stage-bar">
+                <div class="stage-fill" id="throughput-cpu-prep-bar"
+                  style="width: 35%; background: linear-gradient(90deg, #2563eb, var(--blue));">35%</div>
+              </div>
+              <div class="stage-header">
+                <span class="stage-label" style="color: var(--text-muted); font-size: 11px;">XGBoost CPU</span>
+                <span class="stage-value" style="font-size: 11px;">Inference</span>
+              </div>
+              <div class="stage-bar">
+                <div class="stage-fill" id="throughput-cpu-infer-bar"
+                  style="width: 14%; background: linear-gradient(90deg, #2563eb, var(--blue));">14%</div>
               </div>
             </div>
 
@@ -1583,21 +1491,21 @@
                   style="font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--green);"
                   id="throughput-gpu-val">312K TPS</span>
               </div>
-              <div style="margin-bottom: 8px;">
-                <div class="progress-label"><span style="color: var(--text-muted);">RAPIDS cuDF</span><span>Feature
-                    Eng</span></div>
-                <div class="progress-track">
-                  <div class="progress-fill" id="throughput-gpu-prep-bar" style="width: 85%; background: var(--green);">
-                  </div>
-                </div>
+              <div class="stage-header">
+                <span class="stage-label" style="color: var(--text-muted); font-size: 11px;">RAPIDS cuDF</span>
+                <span class="stage-value" style="font-size: 11px;">Feature Eng</span>
               </div>
-              <div>
-                <div class="progress-label"><span style="color: var(--text-muted);">XGBoost
-                    GPU</span><span>Inference</span></div>
-                <div class="progress-track">
-                  <div class="progress-fill" id="throughput-gpu-infer-bar"
-                    style="width: 92%; background: var(--green);"></div>
-                </div>
+              <div class="stage-bar">
+                <div class="stage-fill" id="throughput-gpu-prep-bar"
+                  style="width: 85%; background: linear-gradient(90deg, #16a34a, var(--green));">85%</div>
+              </div>
+              <div class="stage-header">
+                <span class="stage-label" style="color: var(--text-muted); font-size: 11px;">XGBoost GPU</span>
+                <span class="stage-value" style="font-size: 11px;">Inference</span>
+              </div>
+              <div class="stage-bar">
+                <div class="stage-fill" id="throughput-gpu-infer-bar"
+                  style="width: 92%; background: linear-gradient(90deg, #16a34a, var(--green));">92%</div>
               </div>
             </div>
 
@@ -1613,6 +1521,13 @@
 
         <!-- ── RIGHT COLUMN ── -->
         <div class="col-4 stack">
+
+          <!-- Controls -->
+          <div class="btn-row">
+            <button class="btn btn-green" id="btn-start">▶ Start</button>
+            <button class="btn btn-red" id="btn-stop">⏹ Stop</button>
+            <button class="btn btn-amber" id="btn-reset">↺ Reset Data</button>
+          </div>
 
           <!-- Machine Metrics (Prometheus) -->
           <div class="card">
@@ -1763,12 +1678,7 @@
             </div>
           </div>
 
-          <!-- Controls -->
-          <div class="btn-row">
-            <button class="btn btn-green" id="btn-start">▶ Start</button>
-            <button class="btn btn-red" id="btn-stop">⏹ Stop</button>
-            <button class="btn btn-amber" id="btn-reset">↺ Reset Data</button>
-          </div>
+
 
         </div>
       </div>
@@ -1787,6 +1697,25 @@
   </div>
 
   <script>
+    // ==================== UTILITY FUNCTIONS ====================
+
+    // Smooth number formatting - shows continuous progression (1.0M → 1.1M → 1.2M)
+    function formatNumberSmooth(num) {
+      if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+      } else if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+      }
+      return num.toString();
+    }
+
+    // Helper function to format numbers (used in existing code)
+    function fmtNum(n) {
+      return formatNumberSmooth(n);
+    }
+
+    // ==================== TAB SWITCHING ====================
+
     function switchTab(tab) {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -1818,13 +1747,7 @@
     let scaleState = { preprocessing: 0, inference: 0, preprocessing_gpu: 0, inference_gpu: 0, generation_rate: 10000 };
     let ws = null;
 
-    function fmtNum(n) {
-      if (n == null || isNaN(n)) return '0';
-      n = Number(n);
-      if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
-      if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
-      return String(Math.round(n));
-    }
+    // fmtNum is now defined above as formatNumberSmooth wrapper
     function fmtUsd(n) {
       if (n == null || isNaN(n)) return '$0';
       n = Number(n);
@@ -2162,21 +2085,33 @@
         if (el('throughput-cpu-val')) {
           el('throughput-cpu-val').innerHTML = fmtNum(cpuTPS) + ' <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">TPS</span>';
         }
-        // CPU progress bars (Pandas preprocessing ~ 40% of CPU, XGBoost inference ~ 60%)
+        // CPU progress bars (relative to max throughput)
         const cpuPrepPct = cpuTPS > 0 ? Math.min(100, (cpuTPS * 0.4 / maxTPS) * 100) : 5;
         const cpuInferPct = cpuTPS > 0 ? Math.min(100, (cpuTPS * 0.6 / maxTPS) * 100) : 3;
-        if (el('throughput-cpu-prep-bar')) el('throughput-cpu-prep-bar').style.width = cpuPrepPct + '%';
-        if (el('throughput-cpu-infer-bar')) el('throughput-cpu-infer-bar').style.width = cpuInferPct + '%';
+        if (el('throughput-cpu-prep-bar')) {
+          el('throughput-cpu-prep-bar').style.width = cpuPrepPct + '%';
+          el('throughput-cpu-prep-bar').textContent = cpuPrepPct.toFixed(0) + '%';
+        }
+        if (el('throughput-cpu-infer-bar')) {
+          el('throughput-cpu-infer-bar').style.width = cpuInferPct + '%';
+          el('throughput-cpu-infer-bar').textContent = cpuInferPct.toFixed(0) + '%';
+        }
 
         // GPU Path value
         if (el('throughput-gpu-val')) {
           el('throughput-gpu-val').innerHTML = fmtNum(gpuTPS) + ' <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">TPS</span>';
         }
-        // GPU progress bars (RAPIDS cuDF preprocessing ~ 85% of GPU, XGBoost GPU inference ~ 92%)
+        // GPU progress bars (relative to max throughput)
         const gpuPrepPct = gpuTPS > 0 ? Math.min(100, (gpuTPS / maxTPS) * 85) : 5;
         const gpuInferPct = gpuTPS > 0 ? Math.min(100, (gpuTPS / maxTPS) * 92) : 5;
-        if (el('throughput-gpu-prep-bar')) el('throughput-gpu-prep-bar').style.width = gpuPrepPct + '%';
-        if (el('throughput-gpu-infer-bar')) el('throughput-gpu-infer-bar').style.width = gpuInferPct + '%';
+        if (el('throughput-gpu-prep-bar')) {
+          el('throughput-gpu-prep-bar').style.width = gpuPrepPct + '%';
+          el('throughput-gpu-prep-bar').textContent = gpuPrepPct.toFixed(0) + '%';
+        }
+        if (el('throughput-gpu-infer-bar')) {
+          el('throughput-gpu-infer-bar').style.width = gpuInferPct + '%';
+          el('throughput-gpu-infer-bar').textContent = gpuInferPct.toFixed(0) + '%';
+        }
 
         // Combined TPS and Latency
         if (el('throughput-combined')) el('throughput-combined').textContent = fmtNum(combinedTPS) + ' TPS';
