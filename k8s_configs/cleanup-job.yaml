@@ -1,0 +1,28 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cleanup-flashblade-data
+  namespace: fraud-det-v3
+spec:
+  template:
+    spec:
+      securityContext:
+        runAsUser: 0
+      containers:
+      - name: cleanup
+        image: busybox
+        command: ["sh", "-c", "rm -rf /mnt/cpu/raw/* /mnt/cpu/features/* /mnt/gpu/raw/* /mnt/gpu/features/* /mnt/cpu/models/* /mnt/gpu/models/* && chmod -R 777 /mnt/cpu /mnt/gpu && echo 'Volumes cleared and permissions fixed successfully'"]
+        volumeMounts:
+        - name: cpu-vol
+          mountPath: /mnt/cpu
+        - name: gpu-vol
+          mountPath: /mnt/gpu
+      volumes:
+      - name: cpu-vol
+        persistentVolumeClaim:
+          claimName: fraud-det-v3-cpu-fb
+      - name: gpu-vol
+        persistentVolumeClaim:
+          claimName: fraud-det-v3-gpu-fb
+      restartPolicy: Never
+  backoffLimit: 0

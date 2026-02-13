@@ -120,6 +120,8 @@ spec:
         app: "data-gather"
         tier: "generation"
     spec:
+      securityContext:
+        runAsUser: 0
       containers:
         - name: data-gather
           image: apandit07650/fraud-det-v3-data-gather:latest
@@ -184,6 +186,8 @@ spec:
         app: "preprocessing-cpu"
         tier: "preprocessing"
     spec:
+      securityContext:
+        runAsUser: 0
       containers:
         - name: preprocessing-cpu
           image: apandit07650/fraud-det-v3-data-prep:cpu
@@ -242,6 +246,8 @@ spec:
         app: "preprocessing-gpu"
         tier: "preprocessing"
     spec:
+      securityContext:
+        runAsUser: 0
       containers:
         - name: preprocessing-gpu
           image: apandit07650/fraud-det-v3-data-prep:gpu
@@ -302,6 +308,8 @@ spec:
         app: "model-build"
         tier: "training"
     spec:
+      securityContext:
+        runAsUser: 0
       containers:
         - name: model-build
           image: apandit07650/fraud-det-v3-model-build:gpu
@@ -366,6 +374,8 @@ spec:
         app: "inference-cpu"
         tier: "inference"
     spec:
+      securityContext:
+        runAsUser: 0
       containers:
         - name: inference-cpu
           image: apandit07650/fraud-det-v3-inference:cpu
@@ -421,6 +431,8 @@ spec:
         app: "inference-gpu"
         tier: "inference"
     spec:
+      securityContext:
+        runAsUser: 0
       containers:
         - name: inference-gpu
           image: apandit07650/fraud-det-v3-inference:latest
@@ -563,6 +575,12 @@ spec:
       labels:
         app: "backend"
     spec:
+      securityContext:
+        runAsUser: 0
+      tolerations:
+        - key: "node.kubernetes.io/disk-pressure"
+          operator: "Exists"
+          effect: "NoSchedule"
       serviceAccountName: fraud-backend
       containers:
         - name: backend
