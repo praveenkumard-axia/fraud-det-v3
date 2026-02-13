@@ -128,7 +128,7 @@ spec:
         effect: "NoSchedule"
       containers:
         - name: data-gather
-          image: apandit07650/fraud-det-v3-data-gather:latest
+          image: pduraiswamy16722/fraud-det-v3-data-gather:latest
           imagePullPolicy: Always
           env:
             - name: FLASHBLADE_PATH

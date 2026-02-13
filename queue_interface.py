@@ -47,6 +47,11 @@ class QueueInterface(ABC):
         pass
 
     @abstractmethod
+    def clear_all(self) -> bool:
+        """Clear all messages from ALL queues and reset all counters/metrics"""
+        pass
+
+    @abstractmethod
     def increment_metric(self, name: str, amount: int = 1) -> bool:
         """Atomically increment a global metric"""
         pass
@@ -269,12 +274,39 @@ class FlashBladeQueue(QueueInterface):
             paths = self._get_topic_paths(topic)
             
             for dir_type in ["pending", "processing", "completed"]:
-                for file in paths[dir_type].glob("batch_*.parquet"):
-                    file.unlink()
+                if paths[dir_type].exists():
+                    for file in paths[dir_type].glob("*.parquet"):
+                        file.unlink()
             
             return True
         except Exception as e:
             print(f"Error clearing {topic}: {e}")
+            return False
+
+    def clear_all(self) -> bool:
+        """Exhaustively clear ALL messages, metrics, and counters."""
+        try:
+            # 1. Clear all topics
+            topics = ["raw-transactions", "features-ready", "inference-results", "training-queue"]
+            for t in topics:
+                self.clear(t)
+            
+            # 2. Reset counters
+            with self.counter_lock:
+                self.counters = {}
+                self._save_counters()
+            
+            # 3. Reset metrics
+            self.clear_metrics()
+            
+            # 4. Remove any other parquet files in base_path recursive (safety)
+            for p in self.base_path.rglob("*.parquet"):
+                try: p.unlink()
+                except: pass
+                
+            return True
+        except Exception as e:
+            print(f"Error in clear_all: {e}")
             return False
     
     def increment_metric(self, name: str, amount: float = 1) -> bool:

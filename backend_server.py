@@ -633,57 +633,60 @@ async def reset_pipeline():
 async def reset_data():
     """
     Full data reset: Scale down pods, delete all data from FlashBlade volumes, 
-    reset telemetry, and scale pods back up for a fresh start.
+    reset telemetry/queues, and scale pods back up for a fresh start.
     """
     try:
-        # Step 1: Scale down all pods
-        for pod_key in ["data-gather", "preprocessing-cpu", "inference-cpu", "preprocessing-gpu", "model-build", "inference-gpu"]:
+        # Step 1: Scale down all pipeline deployments
+        from k8s_scale import DEPLOYMENT_NAMES
+        for pod_key in DEPLOYMENT_NAMES.keys():
             scale_pod(pod_key, 0)
         
-        # Wait a bit for pods to scale down
+        # Wait for scaling
         import asyncio
-        await asyncio.sleep(3)
+        await asyncio.sleep(2)
         
-        # Step 2: Delete all data from FlashBlade volumes using kubectl run
+        # Step 2: Delete all pods in namespace to force clean restart (except backend)
+        # In a real environment, we'd target -l 'app notin (backend-server)'
+        subprocess.run(
+            "kubectl delete pods -n fraud-det-v3 -l 'app notin (backend-server)' --ignore-not-found=true --grace-period=0 --force 2>&1",
+            shell=True, capture_output=True, text=True
+        )
+        
+        # Step 3: Exhaustive wipe of FlashBlade volumes using a root-cleanup job
+        # We wipe everything including hidden .prep_state.json and .metrics.json
         cleanup_cmd = '''
-kubectl run cleanup-data-temp --image=busybox --restart=Never -n fraud-det-v3 --overrides='{"spec":{"containers":[{"name":"cleanup","image":"busybox","command":["sh","-c","rm -rf /mnt/cpu/* /mnt/gpu/* && echo Data cleared"],"volumeMounts":[{"name":"cpu-volume","mountPath":"/mnt/cpu"},{"name":"gpu-volume","mountPath":"/mnt/gpu"}]}],"volumes":[{"name":"cpu-volume","persistentVolumeClaim":{"claimName":"fraud-det-v3-cpu-fb"}},{"name":"gpu-volume","persistentVolumeClaim":{"claimName":"fraud-det-v3-gpu-fb"}}],"restartPolicy":"Never"}}' 2>&1
+kubectl run exhaustive-cleanup --image=busybox --restart=Never -n fraud-det-v3 --overrides='{"spec":{"containers":[{"name":"cleanup","image":"busybox","command":["sh","-c","rm -rf /mnt/cpu/* /mnt/cpu/.* /mnt/gpu/* /mnt/gpu/.* 2>/dev/null; echo Data fully cleared"],"volumeMounts":[{"name":"cpu-volume","mountPath":"/mnt/cpu"},{"name":"gpu-volume","mountPath":"/mnt/gpu"}]}],"volumes":[{"name":"cpu-volume","persistentVolumeClaim":{"claimName":"fraud-det-v3-cpu-fb"}},{"name":"gpu-volume","persistentVolumeClaim":{"claimName":"fraud-det-v3-gpu-fb"}}],"restartPolicy":"Never"}}' 2>&1
         '''
+        subprocess.run(cleanup_cmd, shell=True, capture_output=True, text=True)
         
-        result = subprocess.run(cleanup_cmd, shell=True, capture_output=True, text=True)
-        
-        # Wait for cleanup to complete
+        # Wait for cleanup completion
         await asyncio.sleep(5)
         
-        # Check cleanup logs
-        log_result = subprocess.run(
-            "kubectl logs cleanup-data-temp -n fraud-det-v3 2>&1",
-            shell=True, capture_output=True, text=True
-        )
+        # Step 4: Clear Redis Queues, Streams, and Stats
+        state.queue_service.clear_all()
         
-        # Delete cleanup pod
-        subprocess.run(
-            "kubectl delete pod cleanup-data-temp -n fraud-det-v3 --ignore-not-found=true 2>&1",
-            shell=True, capture_output=True, text=True
-        )
-        
-        # Step 3: Reset telemetry state
+        # Step 5: Reset internal telemetry state
         state.reset()
         
-        # Step 4: Scale pods back up
+        # Step 6: Scale pods back up to baseline
         scale_pod("data-gather", 1)
         scale_pod("preprocessing-cpu", 1)
         scale_pod("inference-cpu", 1)
-        # Don't scale GPU pods or model-build by default
+        
+        # Final cleanup of temp pod
+        subprocess.run(
+            "kubectl delete pod exhaustive-cleanup -n fraud-det-v3 --ignore-not-found=true 2>&1",
+            shell=True, capture_output=True, text=True
+        )
         
         return {
             "success": True, 
-            "message": "Data cleared and pipeline restarted",
-            "cleanup_log": log_result.stdout if log_result.returncode == 0 else "Cleanup completed"
+            "message": "System fully reset to fresh state. Volumes wiped, queues cleared, and pods restarted."
         }
     except Exception as e:
         return {
             "success": False,
-            "message": f"Error during data reset: {str(e)}"
+            "message": f"Error during exhaustive data reset: {str(e)}"
         }
 
 

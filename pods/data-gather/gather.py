@@ -420,14 +420,14 @@ def main():
                     mem_gb = mem_info.used / (1024**3)
                     log(f"        CPU: {cpu_percent:5.1f}% | RAM: {mem_info.percent:5.1f}% ({mem_gb:.1f} GB) | Queue Published: {total_rows_generated:,}")
                     
-                    # Update Dashboard Stats
-                    total_rows = len(files) * chunk_size
+                    # Use actual publication count for dashboard visibility
+                    total_rows = total_rows_generated
                     throughput = total_rows / elapsed if elapsed > 0 else 0
                     cpu_cores = (cpu_percent / 100.0) * psutil.cpu_count()
                     log_telemetry(total_rows, throughput, elapsed, cpu_cores, mem_gb, mem_info.percent)
                 else:
                     # No psutil, use basic metrics
-                    total_rows = len(files) * chunk_size
+                    total_rows = total_rows_generated
                     throughput = total_rows / elapsed if elapsed > 0 else 0
                     log_telemetry(total_rows, throughput, elapsed, 0.0, 0.0, 0.0)
             except:

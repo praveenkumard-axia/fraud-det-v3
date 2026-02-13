@@ -119,7 +119,33 @@ def collect_metrics(
         total_cores_limit = 41.0
         cpu_util_pct = (cpu_util_millicores / (total_cores_limit * 1000.0)) * 100.0 if cpu_util_millicores > 0 else 0
         
-    cpu_throughput = telemetry.get("throughput", 0)
+    # --- NEW: Delta-based TPS Logic (to prevent pod throughput spikes) ---
+    global _last_telemetry_stats
+    if "_last_telemetry_stats" not in globals():
+        _last_telemetry_stats = {"ts": ts, "gen": 0, "proc": 0}
+    
+    t_delta = ts - _last_telemetry_stats["ts"]
+    generated = telemetry.get("generated", 0)
+    data_prep_cpu = telemetry.get("data_prep_cpu", 0)
+    data_prep_gpu = telemetry.get("data_prep_gpu", 0)
+    processed = data_prep_cpu + data_prep_gpu
+
+    # Calculate REAL TPS based on delta rows / delta time
+    if t_delta > 0.1: # Minimum interval for sanity
+        calc_gen_tps = (generated - _last_telemetry_stats["gen"]) / t_delta
+        calc_proc_tps = (processed - _last_telemetry_stats["proc"]) / t_delta
+        
+        # Smooth the pod-reported values if they seem like total accumulations
+        # or just use our calculated steady deltas (preferred for real-time vibe)
+        cpu_throughput = max(0, int(calc_gen_tps))
+        gpu_throughput = max(0, int(calc_proc_tps))
+    else:
+        cpu_throughput = telemetry.get("throughput", 0)
+        gpu_throughput = int(cpu_throughput * 0.7)
+
+    # Update for next poll
+    _last_telemetry_stats = {"ts": ts, "gen": generated, "proc": processed}
+    
     cpu_point = {
         "t": round(ts, 1), 
         "util_millicores": cpu_util_millicores, 
@@ -133,7 +159,7 @@ def collect_metrics(
     
     # GPU Utilization
     gpu_util = telemetry.get("gpu_util", 0)
-    gpu_throughput = int(cpu_throughput * 0.7)  # Simulated split
+    # Use our calculated processing throughput for GPU path
     gpu_point = {"t": round(ts, 1), "util": gpu_util, "throughput": gpu_throughput}
 
     # Storage Paths
