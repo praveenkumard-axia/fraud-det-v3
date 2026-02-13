@@ -122,6 +122,10 @@ spec:
     spec:
       securityContext:
         runAsUser: 0
+      tolerations:
+      - key: "node.kubernetes.io/disk-pressure"
+        operator: "Exists"
+        effect: "NoSchedule"
       containers:
         - name: data-gather
           image: apandit07650/fraud-det-v3-data-gather:latest
@@ -188,6 +192,10 @@ spec:
     spec:
       securityContext:
         runAsUser: 0
+      tolerations:
+      - key: "node.kubernetes.io/disk-pressure"
+        operator: "Exists"
+        effect: "NoSchedule"
       containers:
         - name: preprocessing-cpu
           image: apandit07650/fraud-det-v3-data-prep:cpu
@@ -248,6 +256,10 @@ spec:
     spec:
       securityContext:
         runAsUser: 0
+      tolerations:
+      - key: "node.kubernetes.io/disk-pressure"
+        operator: "Exists"
+        effect: "NoSchedule"
       containers:
         - name: preprocessing-gpu
           image: apandit07650/fraud-det-v3-data-prep:gpu
@@ -310,6 +322,10 @@ spec:
     spec:
       securityContext:
         runAsUser: 0
+      tolerations:
+      - key: "node.kubernetes.io/disk-pressure"
+        operator: "Exists"
+        effect: "NoSchedule"
       containers:
         - name: model-build
           image: apandit07650/fraud-det-v3-model-build:gpu
@@ -376,6 +392,10 @@ spec:
     spec:
       securityContext:
         runAsUser: 0
+      tolerations:
+      - key: "node.kubernetes.io/disk-pressure"
+        operator: "Exists"
+        effect: "NoSchedule"
       containers:
         - name: inference-cpu
           image: apandit07650/fraud-det-v3-inference:cpu
@@ -433,6 +453,10 @@ spec:
     spec:
       securityContext:
         runAsUser: 0
+      tolerations:
+      - key: "node.kubernetes.io/disk-pressure"
+        operator: "Exists"
+        effect: "NoSchedule"
       containers:
         - name: inference-gpu
           image: apandit07650/fraud-det-v3-inference:latest

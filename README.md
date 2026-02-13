@@ -208,18 +208,25 @@ make build-no-cache
 make restart
 ```
 
-### 5. RBAC / Scaling Errors
+### 6. Permission Denied on Shared Volumes
 
-If the backend fails to scale pods (logs show "Forbidden"), verify RBAC permissions. The `fraud-backend` ServiceAccount must have `deployments/scale` access.
+If logs show `[Errno 13] Permission denied` (e.g. for `.metrics.json`), it means files were created by a different user UID in a previous run.
 
-**Verify Role:**
+**Fix:** Use the `k8s_configs/cleanup-job.yaml` to fix permissions and clear stale data.
+```powershell
+kubectl apply -f k8s_configs/cleanup-job.yaml
+# Wait for completion, then delete
+kubectl delete -f k8s_configs/cleanup-job.yaml
+```
+
+### 7. Node Disk Pressure (Taints)
+
+If pods are stuck in `ContainerCreating` and nodes show `DiskPressure`, the node cannot pull new images.
+
+**Fix:**
+1. Clear the FlashBlade volumes using the cleanup job above.
+2. (If authorized) Clean up Docker/containerd images on the node directly:
 ```bash
-kubectl describe role fraud-backend-role -n fraud-det-v3
+docker system prune -a --volumes --force
 ```
-
-**Fix:** Ensure the Role in `k8s_configs/*.yaml` includes:
-```yaml
-- apiGroups: ["apps"]
-  resources: ["deployments/scale"]
-  verbs: ["get", "patch", "update"]
-```
+3. The `dual-flashblade.yaml` manifest includes **Tolerations** to allow scheduled pods to bypass this blocker while the node recovers.
