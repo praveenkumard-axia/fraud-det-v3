@@ -802,6 +802,11 @@
       color: #fff;
     }
 
+    .btn-amber {
+      background: var(--amber);
+      color: #fff;
+    }
+
     .btn-muted {
       background: var(--bg-elevated);
       color: var(--text-secondary);
@@ -1542,21 +1547,25 @@
           <!-- Throughput Performance -->
           <div class="card">
             <div class="card-header">
-              <span class="card-title">Throughput — CPU vs GPU</span>
+              <span class="card-title">Throughput</span>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-              <div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                  <span style="font-size: 11px; color: var(--blue);">CPU Path</span>
-                  <span style="font-family: var(--mono); font-size: 18px; font-weight: 700;" id="throughput-cpu-val">45K
-                    <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">TPS</span></span>
-                </div>
+
+            <!-- CPU Throughput -->
+            <div class="pipeline-stage">
+              <div class="stage-header">
+                <span class="stage-label" style="color: var(--blue);">CPU Path</span>
+                <span class="stage-value" style="font-family: var(--mono); font-size: 18px; font-weight: 700;"
+                  id="throughput-cpu-val">45K TPS</span>
+              </div>
+              <div style="margin-bottom: 8px;">
                 <div class="progress-label"><span style="color: var(--text-muted);">Pandas</span><span>Feature
                     Eng</span></div>
-                <div class="progress-track" style="margin-bottom: 8px;">
+                <div class="progress-track">
                   <div class="progress-fill" id="throughput-cpu-prep-bar" style="width: 35%; background: var(--blue);">
                   </div>
                 </div>
+              </div>
+              <div>
                 <div class="progress-label"><span style="color: var(--text-muted);">XGBoost
                     CPU</span><span>Inference</span></div>
                 <div class="progress-track">
@@ -1564,19 +1573,25 @@
                   </div>
                 </div>
               </div>
-              <div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                  <span style="font-size: 11px; color: var(--green);">GPU Path</span>
-                  <span style="font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--green);"
-                    id="throughput-gpu-val">312K <span
-                      style="font-size: 11px; font-weight: 400; color: var(--text-muted);">TPS</span></span>
-                </div>
+            </div>
+
+            <!-- GPU Throughput -->
+            <div class="pipeline-stage">
+              <div class="stage-header">
+                <span class="stage-label" style="color: var(--green);">GPU Path</span>
+                <span class="stage-value"
+                  style="font-family: var(--mono); font-size: 18px; font-weight: 700; color: var(--green);"
+                  id="throughput-gpu-val">312K TPS</span>
+              </div>
+              <div style="margin-bottom: 8px;">
                 <div class="progress-label"><span style="color: var(--text-muted);">RAPIDS cuDF</span><span>Feature
                     Eng</span></div>
-                <div class="progress-track" style="margin-bottom: 8px;">
+                <div class="progress-track">
                   <div class="progress-fill" id="throughput-gpu-prep-bar" style="width: 85%; background: var(--green);">
                   </div>
                 </div>
+              </div>
+              <div>
                 <div class="progress-label"><span style="color: var(--text-muted);">XGBoost
                     GPU</span><span>Inference</span></div>
                 <div class="progress-track">
@@ -1585,6 +1600,8 @@
                 </div>
               </div>
             </div>
+
+            <!-- Combined Stats -->
             <div
               style="display: flex; justify-content: center; margin-top: 12px; font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--text-primary); background: var(--bg-card); padding: 8px; border-radius: 4px; text-align: center;">
               Combined: <span style="color: var(--orange); margin: 0 6px;" id="throughput-combined">357K TPS</span> at
@@ -1750,7 +1767,7 @@
           <div class="btn-row">
             <button class="btn btn-green" id="btn-start">▶ Start</button>
             <button class="btn btn-red" id="btn-stop">⏹ Stop</button>
-            <button class="btn btn-muted" id="btn-reset" style="flex: 0; min-width: 44px;">↺</button>
+            <button class="btn btn-amber" id="btn-reset">↺ Reset Data</button>
           </div>
 
         </div>
@@ -2287,10 +2304,48 @@
       } catch (e) { console.warn(e); }
     });
     document.getElementById('btn-reset').addEventListener('click', async () => {
+      // Confirm before clearing all data
+      if (!confirm('⚠️ This will delete ALL pipeline data and restart fresh. Continue?')) {
+        return;
+      }
+
+      const btn = document.getElementById('btn-reset');
+      const origText = btn.textContent;
+
       try {
-        await fetch(API('/api/control/reset'), { method: 'POST' });
-        await fetchScale();
-      } catch (e) { }
+        // Show loading state
+        btn.disabled = true;
+        btn.textContent = '⏳ Clearing data...';
+        btn.style.opacity = '0.6';
+
+        // Call the new data reset endpoint
+        const r = await fetch(API('/api/control/reset-data'), { method: 'POST' });
+        const j = await r.json();
+
+        if (j.success) {
+          btn.textContent = '✓ Data cleared!';
+          btn.style.background = 'var(--green)';
+          setTimeout(() => {
+            btn.textContent = origText;
+            btn.style.background = '';
+            btn.style.opacity = '';
+            btn.disabled = false;
+          }, 2000);
+          await fetchScale();
+        } else {
+          throw new Error(j.message || 'Reset failed');
+        }
+      } catch (e) {
+        console.error('Reset error:', e);
+        btn.textContent = '✗ Failed';
+        btn.style.background = 'var(--red)';
+        setTimeout(() => {
+          btn.textContent = origText;
+          btn.style.background = '';
+          btn.style.opacity = '';
+          btn.disabled = false;
+        }, 2000);
+      }
     });
 
     document.querySelectorAll('.scale-btn').forEach(btn => {

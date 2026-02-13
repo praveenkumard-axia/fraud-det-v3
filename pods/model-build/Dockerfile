@@ -1,7 +1,7 @@
 # Pod 3: Model Training
 # XGBoost with GPU acceleration
 
-FROM nvcr.io/nvidia/rapidsai/base:24.02-cuda12.0-py3.10
+FROM nvcr.io/nvidia/rapidsai/base:24.04-cuda12.0-py3.10
 
 WORKDIR /app
 

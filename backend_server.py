@@ -629,6 +629,64 @@ async def reset_pipeline():
     return {"success": True, "message": "Pipeline reset"}
 
 
+@app.post("/api/control/reset-data")
+async def reset_data():
+    """
+    Full data reset: Scale down pods, delete all data from FlashBlade volumes, 
+    reset telemetry, and scale pods back up for a fresh start.
+    """
+    try:
+        # Step 1: Scale down all pods
+        for pod_key in ["data-gather", "preprocessing-cpu", "inference-cpu", "preprocessing-gpu", "model-build", "inference-gpu"]:
+            scale_pod(pod_key, 0)
+        
+        # Wait a bit for pods to scale down
+        import asyncio
+        await asyncio.sleep(3)
+        
+        # Step 2: Delete all data from FlashBlade volumes using kubectl run
+        cleanup_cmd = '''
+kubectl run cleanup-data-temp --image=busybox --restart=Never -n fraud-det-v3 --overrides='{"spec":{"containers":[{"name":"cleanup","image":"busybox","command":["sh","-c","rm -rf /mnt/cpu/* /mnt/gpu/* && echo Data cleared"],"volumeMounts":[{"name":"cpu-volume","mountPath":"/mnt/cpu"},{"name":"gpu-volume","mountPath":"/mnt/gpu"}]}],"volumes":[{"name":"cpu-volume","persistentVolumeClaim":{"claimName":"fraud-det-v3-cpu-fb"}},{"name":"gpu-volume","persistentVolumeClaim":{"claimName":"fraud-det-v3-gpu-fb"}}],"restartPolicy":"Never"}}' 2>&1
+        '''
+        
+        result = subprocess.run(cleanup_cmd, shell=True, capture_output=True, text=True)
+        
+        # Wait for cleanup to complete
+        await asyncio.sleep(5)
+        
+        # Check cleanup logs
+        log_result = subprocess.run(
+            "kubectl logs cleanup-data-temp -n fraud-det-v3 2>&1",
+            shell=True, capture_output=True, text=True
+        )
+        
+        # Delete cleanup pod
+        subprocess.run(
+            "kubectl delete pod cleanup-data-temp -n fraud-det-v3 --ignore-not-found=true 2>&1",
+            shell=True, capture_output=True, text=True
+        )
+        
+        # Step 3: Reset telemetry state
+        state.reset()
+        
+        # Step 4: Scale pods back up
+        scale_pod("data-gather", 1)
+        scale_pod("preprocessing-cpu", 1)
+        scale_pod("inference-cpu", 1)
+        # Don't scale GPU pods or model-build by default
+        
+        return {
+            "success": True, 
+            "message": "Data cleared and pipeline restarted",
+            "cleanup_log": log_result.stdout if log_result.returncode == 0 else "Cleanup completed"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Error during data reset: {str(e)}"
+        }
+
+
 @app.post("/api/control/scale")
 async def scale_pods(config: ScaleConfig):
     """Update pod scaling configuration (simulated)"""
