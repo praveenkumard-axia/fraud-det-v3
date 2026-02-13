@@ -1535,21 +1535,31 @@
               <span class="card-title">Machine Metrics</span>
               <span class="card-badge" style="background: var(--purple-dim); color: var(--purple);">Prometheus</span>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 12px;">
               <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--blue);"
+                <div style="font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--blue);"
                   id="mm-cpu">0</div>
-                <div style="font-size: 10px; color: var(--text-muted);">CPU txns/s</div>
+                <div style="font-size: 8px; color: var(--text-muted);">CPU TPS</div>
               </div>
               <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--green);"
+                <div style="font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--green);"
                   id="mm-gpu">0</div>
-                <div style="font-size: 10px; color: var(--text-muted);">GPU txns/s</div>
+                <div style="font-size: 8px; color: var(--text-muted);">GPU TPS</div>
               </div>
               <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--orange);"
+                <div style="font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--orange);"
                   id="mm-fb">0</div>
-                <div style="font-size: 10px; color: var(--text-muted);">FB MB/s</div>
+                <div style="font-size: 8px; color: var(--text-muted);">FB MB/s</div>
+              </div>
+              <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
+                <div style="font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--purple);"
+                  id="mm-node-cpu">0%</div>
+                <div style="font-size: 8px; color: var(--text-muted);">Node CPU</div>
+              </div>
+              <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
+                <div style="font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--purple);"
+                  id="mm-node-ram">0%</div>
+                <div style="font-size: 8px; color: var(--text-muted);">Node RAM</div>
               </div>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
@@ -1874,6 +1884,15 @@
       if (document.getElementById('fb-util')) document.getElementById('fb-util').textContent = fbUtil + '%';
       if (document.getElementById('fb-util-bar')) document.getElementById('fb-util-bar').style.width = Math.min(100, fbUtil) + '%';
 
+      // Update Node CPU/RAM from Infra
+      const nodeStatus = (data.infra && data.infra.node) ? data.infra.node : {};
+      if (document.getElementById('mm-node-cpu') && nodeStatus.cpu_percent != null) {
+        document.getElementById('mm-node-cpu').textContent = nodeStatus.cpu_percent.toFixed(1) + '%';
+      }
+      if (document.getElementById('mm-node-ram') && nodeStatus.ram_percent != null) {
+        document.getElementById('mm-node-ram').textContent = nodeStatus.ram_percent.toFixed(1) + '%';
+      }
+
       // Update Fraud Velocity badge from KPIs
       const fraudVelocity = kpis['11_fraud_velocity_per_min'];
       if (document.getElementById('velocity-badge') && fraudVelocity != null) {
@@ -2048,6 +2067,11 @@
         const model = j.Model || {};
         const ml = model.ml_details || {};
         const metadata = model.metadata || {};
+        const infra = j.infra || {};
+        const node = infra.node || {};
+
+        if (el('mm-node-cpu') && node.cpu_percent != null) el('mm-node-cpu').textContent = node.cpu_percent.toFixed(1) + '%';
+        if (el('mm-node-ram') && node.ram_percent != null) el('mm-node-ram').textContent = node.ram_percent.toFixed(1) + '%';
 
         // Calculate throughput from Model data if direct metrics are 0
         // Use transactions_analyzed and elapsed time to estimate TPS
@@ -2118,7 +2142,6 @@
         if (el('throughput-latency')) el('throughput-latency').textContent = latencyMs.toFixed(0) + 'ms';
 
         // Update Infra Allocation display
-        const infra = j.infra || {};
         const alloc = infra.allocation || {};
         const infraList = el('infra-allocation-list');
         if (infraList && Object.keys(alloc).length > 0) {
