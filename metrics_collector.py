@@ -175,19 +175,16 @@ def collect_metrics(
     except ImportError:
         pass
 
-    # FB Points for series
-    fb_cpu_point = {
+    # FB Points for series (Combined for UI)
+    fb_point = {
         "t": round(ts, 1),
         "util": pure1.get("util_pct", 0),
-        "throughput_mbps": round(fb_read_mbps, 2),
-    }
-    fb_gpu_point = {
-        "t": round(ts, 1),
-        "util": pure1.get("util_pct", 0),
-        "throughput_mbps": round(fb_write_mbps, 2),
+        "read_mbps": round(fb_read_mbps, 2),
+        "write_mbps": round(fb_write_mbps, 2),
+        "throughput_mbps": round(fb_read_mbps + fb_write_mbps, 2),
     }
 
-    # Business from telemetry + queue
+    # 17 KPIs
     generated = telemetry.get("generated", 0)
     data_prep_cpu = telemetry.get("data_prep_cpu", 0)
     data_prep_gpu = telemetry.get("data_prep_gpu", 0)
@@ -212,9 +209,9 @@ def collect_metrics(
     payload = {
         "cpu": [cpu_point],
         "gpu": [gpu_point],
-        "fb_cpu": [fb_cpu_point],
-        "fb_gpu": [fb_gpu_point],
-        "fb": [fb_cpu_point], # Fallback for old UI
+        "fb_cpu": [fb_point],
+        "fb_gpu": [fb_point],
+        "fb": [fb_point], 
         "storage": {
             "cpu_mbps": round(fb_read_mbps, 2),
             "gpu_mbps": round(fb_write_mbps, 2),

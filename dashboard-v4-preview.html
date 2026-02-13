@@ -1666,7 +1666,7 @@
             </div>
             <div style="text-align: center; margin-top: 10px;">
               <span style="color: var(--text-muted); font-size: 11px;">Headroom: </span>
-              <span
+              <span id="fb-headroom"
                 style="color: var(--green); font-family: var(--mono); font-size: 22px; font-weight: 700;">8.3×</span>
             </div>
           </div>
@@ -1728,14 +1728,10 @@
   <script>
     // ==================== UTILITY FUNCTIONS ====================
 
-    // Smooth number formatting - shows continuous progression (1.0M → 1.1M → 1.2M)
+    // Shows full numbers as they increase (e.g., 1,000, 1,001, 1,002)
     function formatNumberSmooth(num) {
-      if (num >= 1000000) {
-        return (num / 1000000).toFixed(1) + 'M';
-      } else if (num >= 1000) {
-        return (num / 1000).toFixed(1) + 'K';
-      }
-      return num.toString();
+      if (num == null || isNaN(num)) return '0';
+      return Math.floor(num).toLocaleString();
     }
 
     // Helper function to format numbers (used in existing code)
@@ -1780,9 +1776,8 @@
     function fmtUsd(n) {
       if (n == null || isNaN(n)) return '$0';
       n = Number(n);
-      if (n >= 1e6) return '$' + (n / 1e6).toFixed(0) + 'M';
-      if (n >= 1e3) return '$' + (n / 1e3).toFixed(0) + 'K';
-      return '$' + n.toFixed(0);
+      if (n >= 1e7) return '$' + (n / 1e6).toFixed(1) + 'M'; // Only use M for > 10M
+      return '$' + Math.floor(n).toLocaleString();
     }
     function fmtElapsed(sec) {
       const m = Math.floor(sec / 60);
@@ -1839,19 +1834,20 @@
         if (ind) { ind.style.background = running ? 'var(--red-dim)' : 'var(--bg-card)'; ind.style.borderColor = running ? 'rgba(239,68,68,0.3)' : 'var(--border)'; }
       }
 
-      const generated = gen.no_of_generated ?? b.no_of_generated ?? 0;
+      const generated = b.no_of_generated ?? gen.no_of_generated ?? 0;
 
-      // Calculate generation rate per 5 sec for gauge
+      // Calculate generation rate per 1 sec (since we update every 1s)
       if (window.lastGeneratedCount !== undefined) {
         const diff = Math.max(0, generated - window.lastGeneratedCount);
-        // For simplicity, we'll show current estimated 5sec throughput.
+        // Show current per-second throughput * 5 for the "5 sec" gauge feel
         const rate5sec = diff * 5;
+
         if (rate5sec > 0 || (window.lastRate5sec > 0)) {
           if (document.getElementById('gen-gauge-val')) {
-            document.getElementById('gen-gauge-val').textContent = fmtNum(rate5sec);
+            document.getElementById('gen-gauge-val').textContent = formatNumberSmooth(rate5sec);
           }
           if (document.getElementById('gen-gauge-fill')) {
-            const maxGauge = 500000; // 100K/s * 5
+            const maxGauge = 250000; // Adjusted for 50K/s * 5
             const pct = Math.min(100, (rate5sec / maxGauge) * 100);
             const deg = -45 + (pct * 1.8);
             document.getElementById('gen-gauge-fill').style.transform = `rotate(${deg}deg)`;
@@ -1902,6 +1898,14 @@
       if (document.getElementById('fb-write')) document.getElementById('fb-write').textContent = (fb.write_mbps ?? fb.throughput_mbps ?? 0).toFixed(1) + ' MB/s';
       if (document.getElementById('fb-util')) document.getElementById('fb-util').textContent = fbUtil + '%';
       if (document.getElementById('fb-util-bar')) document.getElementById('fb-util-bar').style.width = Math.min(100, fbUtil) + '%';
+
+      // Dynamic Headroom (FlashBlade//S typical max 75GB/s = 76800 MB/s)
+      if (document.getElementById('fb-headroom')) {
+        const totalThroughput = (fb.read_mbps ?? 0) + (fb.write_mbps ?? 0) || (fb.throughput_mbps ?? 0) || 0;
+        const maxBw = 76800;
+        const headroom = totalThroughput > 10 ? (maxBw / totalThroughput).toFixed(1) : '—';
+        document.getElementById('fb-headroom').textContent = headroom === '—' ? 'BASELINE' : headroom + '×';
+      }
 
       // Update Fraud Velocity badge from KPIs
       const fraudVelocity = kpis['11_fraud_velocity_per_min'];
@@ -2409,7 +2413,13 @@
     function connectWS() {
       try {
         ws = new WebSocket(wsUrl());
-        ws.onmessage = (e) => { try { updateDashboard(JSON.parse(e.data)); } catch (err) { } };
+        ws.onmessage = (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            window.lastDashboardData = data; // Cache for dropdown sync
+            updateDashboard(data);
+          } catch (err) { }
+        };
         ws.onclose = () => { setTimeout(connectWS, 2000); };
         ws.onerror = () => { };
       } catch (err) { setTimeout(connectWS, 2000); }
@@ -2533,6 +2543,30 @@
       if (rc && vc) vc.textContent = rc.value;
       if (rm && vm) vm.textContent = rm.value + ' GB';
     }
+    document.getElementById('resource-pod-select').addEventListener('change', () => {
+      const pod = document.getElementById('resource-pod-select').value;
+      const lastData = window.lastDashboardData;
+      if (lastData && lastData.infra && lastData.infra.allocation) {
+        const alloc = lastData.infra.allocation[pod];
+        if (alloc) {
+          const rc = document.getElementById('resource-cpu');
+          const rm = document.getElementById('resource-mem');
+          // Parse "8000m" or "8" -> 8
+          const cpuVal = parseInt(alloc.cpu_limit, 10);
+          const cpuFinal = alloc.cpu_limit.endsWith('m') ? cpuVal / 1000 : cpuVal;
+          // Parse "32Gi" or "32768Mi" -> 32
+          const memVal = parseInt(alloc.mem_limit, 10);
+          let memFinal = memVal;
+          if (alloc.mem_limit.toLowerCase().endsWith('gi')) memFinal = memVal;
+          else if (alloc.mem_limit.toLowerCase().endsWith('mi')) memFinal = Math.round(memVal / 1024);
+
+          if (rc) rc.value = cpuFinal;
+          if (rm) rm.value = memFinal;
+          updateResourceLabels();
+        }
+      }
+    });
+
     function patchResources() {
       const pod = document.getElementById('resource-pod-select').value;
       const cpu = document.getElementById('resource-cpu').value;
