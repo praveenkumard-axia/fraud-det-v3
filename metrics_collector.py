@@ -102,17 +102,21 @@ def collect_metrics(
     Returns the structured dict to be stored and emitted over WebSocket.
     """
     ts = time.time()
-    pod_top = _kubectl_top_pods(namespace)
+    
+    # NEW: Skip K8s top in local mode to prevent hangs/lag
+    from k8s_scale import LOCAL_MODE
+    pod_top = [] if LOCAL_MODE else _kubectl_top_pods(namespace)
+    
     prom = fetch_prometheus_metrics()
 
     # CPU Utilization
-    # 1. Try Node Exporter (Cluster level)
-    # 2. Try kubectl top (Pod level sum)
-    # 3. Fallback to telemetry
     cpu_util_millicores = sum(p.get("cpu_millicores", 0) for p in pod_top)
     node_cpu_pct = prom.get("node_cpu_percent")
     
-    if node_cpu_pct is not None:
+    # Use telemetry CPU if available in local mode
+    if LOCAL_MODE:
+        cpu_util_pct = telemetry.get("cpu_percent", 0)
+    elif node_cpu_pct is not None:
         cpu_util_pct = node_cpu_pct
     else:
         # Fallback to sum of millicores vs total limit (approx 41 cores in manifest)
@@ -135,10 +139,13 @@ def collect_metrics(
         calc_gen_tps = (generated - _last_telemetry_stats["gen"]) / t_delta
         calc_proc_tps = (processed - _last_telemetry_stats["proc"]) / t_delta
         
-        # Smooth the pod-reported values if they seem like total accumulations
-        # or just use our calculated steady deltas (preferred for real-time vibe)
+        # Smooth throughput or use reported
         cpu_throughput = max(0, int(calc_gen_tps))
         gpu_throughput = max(0, int(calc_proc_tps))
+        
+        # Fallback to current reported throughput if deltas are zero but rows > 0 (starting up)
+        if cpu_throughput == 0 and generated > 0:
+             cpu_throughput = telemetry.get("throughput", 0)
     else:
         cpu_throughput = telemetry.get("throughput", 0)
         gpu_throughput = int(cpu_throughput * 0.7)
@@ -254,12 +261,27 @@ def collect_metrics(
         },
         "business": {
             "no_of_generated": generated,
-            "no_of_processed": processed,
+            "no_of_processed": txns_scored,
             "no_fraud": fraud_blocked,
+            "no_blocked": fraud_blocked,
             "pods": {
-                "generation": {"no_of_generated": generated, "stream_speed": cpu_throughput},
-                "prep": {"no_of_transformed": processed},
-                "inference": {"fraud": fraud_blocked}
+                "generation": {
+                    "no_of_generated": generated, 
+                    "stream_speed": int(cpu_throughput)
+                },
+                "prep": {
+                    "no_of_transformed": processed, 
+                    "prep_velocity": int(gpu_throughput)
+                },
+                "model_train": {
+                    "samples_trained": telemetry.get("samples_trained", 0),
+                    "status": telemetry.get("status", "Running")
+                },
+                "inference": {
+                    "fraud": fraud_blocked,
+                    "non_fraud": max(0, txns_scored - fraud_blocked),
+                    "percent_score": 100 
+                }
             }
         },
         "timestamp": ts,
@@ -317,8 +339,10 @@ def write_metrics_json(
 ) -> None:
     path = path or METRICS_JSON_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w") as f:
+    tmp_path = path.with_suffix(".tmp")
+    with open(tmp_path, "w") as f:
         json.dump(payload, f, indent=0)
+    tmp_path.replace(path) # Atomic rename
 
 
 def run_one_poll(

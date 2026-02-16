@@ -156,18 +156,30 @@ class FlashBladeQueue(QueueInterface):
             pass
 
     def _save_metrics(self):
-        """Save global metrics to disk"""
+        """Save global metrics to disk (Atomic write)"""
         metrics_file = self.base_path / "queue" / ".metrics.json"
+        tmp_file = metrics_file.with_suffix(".tmp")
         metrics_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(metrics_file, 'w') as f:
-            json.dump(self.metrics, f)
+        
+        try:
+            with open(tmp_file, 'w') as f:
+                json.dump(self.metrics, f)
+            tmp_file.replace(metrics_file) # Atomic rename
+        except Exception as e:
+            print(f"Error saving metrics: {e}")
 
     def _save_counters(self):
-        """Save file counters to disk"""
+        """Save file counters to disk (Atomic write)"""
         counter_file = self.base_path / "queue" / ".counters.json"
+        tmp_file = counter_file.with_suffix(".tmp")
         counter_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(counter_file, 'w') as f:
-            json.dump(self.counters, f)
+        
+        try:
+            with open(tmp_file, 'w') as f:
+                json.dump(self.counters, f)
+            tmp_file.replace(counter_file) # Atomic rename
+        except Exception as e:
+            print(f"Error saving counters: {e}")
     
     def _get_next_filename(self, topic: str) -> str:
         """Get next sequential filename for topic"""
@@ -234,9 +246,24 @@ class FlashBladeQueue(QueueInterface):
         
         for file_path in pending_files[:batch_size]:
             try:
+                # ✅ FIX: Check file exists before attempting move (race condition protection)
+                if not file_path.exists():
+                    # File already processed by another pod - skip silently
+                    continue
+                
                 # Move to processing (atomic operation)
                 processing_path = processing_dir / file_path.name
-                file_path.rename(processing_path)
+                
+                try:
+                    file_path.rename(processing_path)
+                except FileNotFoundError:
+                    # ✅ FIX: Race condition - another pod grabbed this file first
+                    # This is NORMAL in concurrent systems - skip silently
+                    continue
+                except Exception as e:
+                    # Unexpected error during rename - log it
+                    print(f"[{topic}] Unexpected error moving file: {e}")
+                    continue
                 
                 # Read Parquet file
                 df = pl.read_parquet(processing_path)
@@ -247,18 +274,36 @@ class FlashBladeQueue(QueueInterface):
                 
                 # Move to completed
                 completed_path = completed_dir / file_path.name
-                processing_path.rename(completed_path)
+                try:
+                    processing_path.rename(completed_path)
+                except Exception as e:
+                    # Error moving to completed - log but continue
+                    print(f"[{topic}] Error moving to completed: {e}")
                 
                 files_processed += 1
                 
+            except FileNotFoundError:
+                # ✅ FIX: File disappeared during processing - skip silently
+                # This is NORMAL - file was processed by another pod
+                continue
+                
             except Exception as e:
-                print(f"Error consuming from {topic}: {e}")
-                # Try to move file back to pending if it's still in processing
+                # Unexpected error (corrupted file?) - log it 
+                print(f"[{topic}] Error processing file {file_path.name}: {e}")
+                
+                # If file is in processing, move it to a 'corrupted' folder instead of retrying forever
+                processing_path = processing_dir / file_path.name
                 if processing_path.exists():
                     try:
-                        processing_path.rename(file_path)
-                    except:
-                        pass
+                        corrupted_dir = paths["pending"].parent / "corrupted"
+                        corrupted_dir.mkdir(parents=True, exist_ok=True)
+                        processing_path.rename(corrupted_dir / file_path.name)
+                        print(f"[{topic}] Moved corrupted file to {corrupted_dir}")
+                    except Exception as rename_err:
+                        print(f"[{topic}] Failed to move corrupted file: {rename_err}")
+                        # Last ditch: delete it
+                        try: processing_path.unlink()
+                        except: pass
         
         return messages
     

@@ -1415,6 +1415,17 @@
               </div>
             </div>
             <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Txns / 5 Sec</div>
+
+            <div style="margin-top: 15px; padding: 0 20px;">
+              <input type="range" id="generator-speed" min="1000" max="100000" value="10000" step="1000"
+                style="width: 100%; cursor: pointer;">
+              <div
+                style="display: flex; justify-content: space-between; font-size: 9px; color: var(--text-muted); margin-top: 4px;">
+                <span>1K/s</span>
+                <span id="generator-speed-val" style="color: var(--purple); font-weight: bold;">10K</span>
+                <span>100K/s</span>
+              </div>
+            </div>
           </div>
 
           <!-- Pipeline Status -->
@@ -1750,6 +1761,12 @@
   </div>
 
   <script>
+    // ==================== GLOBAL CONSTANTS & HELPERS ====================
+    const el = (id) => document.getElementById(id);
+    const SLOW_POLL_INTERVAL = 5000;
+    const FAST_POLL_INTERVAL = 1000;
+    let currentPollInterval = SLOW_POLL_INTERVAL;
+
     // ==================== UTILITY FUNCTIONS ====================
 
     // Smooth number formatting - shows continuous progression (1.0M → 1.1M → 1.2M)
@@ -2000,7 +2017,6 @@
 
     function updateBusinessMetrics(b) {
       if (!b) return;
-      const el = (id) => document.getElementById(id);
       if (el('kpi-fraud-exposure')) el('kpi-fraud-exposure').textContent = fmtUsd(b.fraud_exposure_identified);
       if (el('kpi-fraud-rate')) el('kpi-fraud-rate').textContent = (Number(b.fraud_rate || 0) * 100).toFixed(2) + '%';
       if (el('kpi-alerts')) el('kpi-alerts').textContent = fmtNum(b.alerts_per_million || 0);
@@ -2126,7 +2142,7 @@
     }
 
     let businessPollTimer = null;
-    let currentPollInterval = 1000; // Always use 1 second when polling is active
+    currentPollInterval = 1000; // Always use 1 second when polling is active
     const POLL_INTERVAL = 1000; // 1 second when pipeline is running
     let isPollingActive = false; // Track if we should be polling
 
@@ -2188,7 +2204,6 @@
       try {
         const r = await fetch(API('/api/machine/metrics'));
         const j = await r.json();
-        const el = (id) => document.getElementById(id);
         const t = j.throughput || {};
         const fb = j.FlashBlade || {};
         const model = j.Model || {};
@@ -2570,70 +2585,77 @@
       } catch (e) { }
     }
 
-    document.getElementById('btn-start').addEventListener('click', async () => {
-      try {
-        const r = await fetch(API('/api/control/start'), { method: 'POST' });
-        const j = await r.json();
-        if (j.success) {
-          await fetchScale();
-          startBusinessPoll(); // Start polling when user clicks Start
+    const btnStart = el('btn-start');
+    if (btnStart) {
+      btnStart.addEventListener('click', async () => {
+        try {
+          const r = await fetch(API('/api/control/start'), { method: 'POST' });
+          const j = await r.json();
+          if (j.success) {
+            await fetchScale();
+            startBusinessPoll();
+          }
+        } catch (e) { console.warn(e); }
+      });
+    }
+
+    const btnStop = el('btn-stop');
+    if (btnStop) {
+      btnStop.addEventListener('click', async () => {
+        try {
+          const r = await fetch(API('/api/control/stop'), { method: 'POST' });
+          const j = await r.json();
+          if (j.success) {
+            await fetchScale();
+            stopBusinessPoll();
+          }
+        } catch (e) { console.warn(e); }
+      });
+    }
+    const btnReset = el('btn-reset');
+    if (btnReset) {
+      btnReset.addEventListener('click', async () => {
+        if (!confirm('⚠️ This will delete ALL pipeline data and restart fresh. Continue?')) {
+          return;
         }
-      } catch (e) { console.warn(e); }
-    });
-    document.getElementById('btn-stop').addEventListener('click', async () => {
-      try {
-        const r = await fetch(API('/api/control/stop'), { method: 'POST' });
-        const j = await r.json();
-        if (j.success) {
-          await fetchScale();
-          stopBusinessPoll(); // Stop polling when user clicks Stop
-        }
-      } catch (e) { console.warn(e); }
-    });
-    document.getElementById('btn-reset').addEventListener('click', async () => {
-      // Confirm before clearing all data
-      if (!confirm('⚠️ This will delete ALL pipeline data and restart fresh. Continue?')) {
-        return;
-      }
+        const origText = btnReset.textContent;
 
-      const btn = document.getElementById('btn-reset');
-      const origText = btn.textContent;
+        try {
+          // Show loading state
+          btn.disabled = true;
+          btn.textContent = '⏳ Clearing data...';
+          btn.style.opacity = '0.6';
 
-      try {
-        // Show loading state
-        btn.disabled = true;
-        btn.textContent = '⏳ Clearing data...';
-        btn.style.opacity = '0.6';
+          // Call the new data reset endpoint
+          const r = await fetch(API('/api/control/reset-data'), { method: 'POST' });
+          const j = await r.json();
 
-        // Call the new data reset endpoint
-        const r = await fetch(API('/api/control/reset-data'), { method: 'POST' });
-        const j = await r.json();
-
-        if (j.success) {
-          btn.textContent = '✓ Data cleared!';
-          btn.style.background = 'var(--green)';
+          if (j.success) {
+            btnReset.textContent = '✓ Data cleared!';
+            btnReset.style.background = 'var(--green)';
+            setTimeout(() => {
+              btnReset.textContent = origText;
+              btnReset.style.background = '';
+              btnReset.style.opacity = '';
+              btnReset.disabled = false;
+            }, 2000);
+            await fetchScale();
+          } else {
+            throw new Error(j.message || 'Reset failed');
+          }
+        } catch (e) {
+          console.error('Reset error:', e);
+          btnReset.textContent = '✗ Failed';
+          btnReset.style.background = 'var(--red)';
           setTimeout(() => {
-            btn.textContent = origText;
-            btn.style.background = '';
-            btn.style.opacity = '';
-            btn.disabled = false;
+            btnReset.textContent = origText;
+            btnReset.style.background = '';
+            btnReset.style.opacity = '';
+            btnReset.disabled = false;
           }, 2000);
-          await fetchScale();
-        } else {
-          throw new Error(j.message || 'Reset failed');
         }
-      } catch (e) {
-        console.error('Reset error:', e);
-        btn.textContent = '✗ Failed';
-        btn.style.background = 'var(--red)';
-        setTimeout(() => {
-          btn.textContent = origText;
-          btn.style.background = '';
-          btn.style.opacity = '';
-          btn.disabled = false;
-        }, 2000);
-      }
-    });
+      });
+    }
 
     document.querySelectorAll('.scale-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -2649,11 +2671,15 @@
       });
     });
 
-    document.getElementById('generator-speed').addEventListener('input', (e) => {
-      const v = parseInt(e.target.value, 10);
-      document.getElementById('generator-speed-val').textContent = fmtNum(v);
-      fetch(API('/api/control/throttle'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rate: v }) }).catch(() => { });
-    });
+    const gsBtn = document.getElementById('generator-speed');
+    if (gsBtn) {
+      gsBtn.addEventListener('input', (e) => {
+        const v = parseInt(e.target.value, 10);
+        const gsv = document.getElementById('generator-speed-val');
+        if (gsv) gsv.textContent = fmtNum(v);
+        fetch(API('/api/control/throttle'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rate: v }) }).catch(() => { });
+      });
+    }
 
     // Resource Allocation: fetch bounds and wire sliders
     let resourceBounds = { cpu_min: 1, cpu_max: 8, memory_min_gb: 1, memory_max_gb: 8 };
@@ -2679,33 +2705,49 @@
       if (rm && vm) vm.textContent = rm.value + ' GB';
     }
     function patchResources() {
-      const pod = document.getElementById('resource-pod-select').value;
-      const cpu = document.getElementById('resource-cpu').value;
-      const mem = document.getElementById('resource-mem').value;
-      const toast = document.getElementById('resource-toast');
-      // Convert CPU to millicores format (e.g., "4" -> "4000m")
+      const select = el('resource-pod-select');
+      const rc = el('resource-cpu');
+      const rm = el('resource-mem');
+      const toast = el('resource-toast');
+      if (!select || !rc || !rm) return;
+
+      const pod = select.value;
+      const cpu = rc.value;
+      const mem = rm.value;
+
       const cpuLimit = (parseInt(cpu, 10) * 1000) + 'm';
       const memoryLimit = mem * 1000 + 'Mi';
+
       fetch(API('/api/resources/' + pod), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cpu_limit: cpuLimit, memory_limit: memoryLimit })
       }).then(r => r.json()).then(j => {
-        toast.textContent = j.success ? 'Updated' : (j.error || 'Failed');
-        toast.style.color = j.success ? 'var(--green)' : 'var(--red)';
-        setTimeout(() => { toast.textContent = ''; }, 3000);
-      }).catch(() => { toast.textContent = 'Request failed'; toast.style.color = 'var(--red)'; });
+        if (toast) {
+          toast.textContent = j.success ? 'Updated' : (j.error || 'Failed');
+          toast.style.color = j.success ? 'var(--green)' : 'var(--red)';
+          setTimeout(() => { toast.textContent = ''; }, 3000);
+        }
+      }).catch(() => { if (toast) { toast.textContent = 'Request failed'; toast.style.color = 'var(--red)'; } });
     }
-    document.getElementById('resource-cpu').addEventListener('input', (e) => {
-      updateResourceLabels();
-      clearTimeout(resourcePatchTimeout);
-      resourcePatchTimeout = setTimeout(patchResources, 500);
-    });
-    document.getElementById('resource-mem').addEventListener('input', (e) => {
-      updateResourceLabels();
-      clearTimeout(resourcePatchTimeout);
-      resourcePatchTimeout = setTimeout(patchResources, 500);
-    });
+
+    const rcSlider = el('resource-cpu');
+    if (rcSlider) {
+      rcSlider.addEventListener('input', (e) => {
+        updateResourceLabels();
+        clearTimeout(resourcePatchTimeout);
+        resourcePatchTimeout = setTimeout(patchResources, 500);
+      });
+    }
+
+    const rmSlider = el('resource-mem');
+    if (rmSlider) {
+      rmSlider.addEventListener('input', (e) => {
+        updateResourceLabels();
+        clearTimeout(resourcePatchTimeout);
+        resourcePatchTimeout = setTimeout(patchResources, 500);
+      });
+    }
     fetchResourceBounds();
 
     // ==================== HEIGHT SYNCHRONIZATION ====================

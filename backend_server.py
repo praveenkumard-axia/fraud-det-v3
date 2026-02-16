@@ -125,12 +125,17 @@ class OptimizedMetricsCache:
             # Instead of 40+ separate file reads, read metrics file ONCE
             new_cache = self._batch_read_all_metrics(queue_service)
             
-            # Update cache atomically
-            with self._lock:
-                self.cache = new_cache
-                self.last_update = now
-                
-            print(f"📊 Cache refreshed - {len(new_cache)} metrics loaded")
+            # ✅ FIX: ONLY update if we got a valid non-empty dict
+            if new_cache:
+                with self._lock:
+                    self.cache = new_cache
+                    self.last_update = now
+                print(f"📊 Cache refreshed - {len(new_cache)} metrics loaded")
+            else:
+                # Keep old cache if update failed, but update last_update to prevent constant retries if file is missing
+                with self._lock:
+                    self.last_update = now
+                print("⚠️  Cache refresh returned empty - keeping stale data")
             
         except Exception as e:
             print(f"❌ Cache refresh failed: {e}")
@@ -145,7 +150,8 @@ class OptimizedMetricsCache:
         """
         try:
             # Read the metrics JSON file directly (1 file operation)
-            metrics_file = Path("/mnt/flashblade/.metrics.json")
+            # Use queue service's base path (works with both FlashBlade and local)
+            metrics_file = Path(queue_service.base_path) / "queue" / ".metrics.json"
             if not metrics_file.exists():
                 return {}
             
@@ -162,10 +168,11 @@ class OptimizedMetricsCache:
             
             return all_metrics
             
-        except Exception as e:
-            print(f"⚠️  Batch read failed, falling back: {e}")
-            # Fallback: return empty dict
-            return {}
+        except (json.JSONDecodeError, FileNotFoundError, Exception) as e:
+            if not isinstance(e, FileNotFoundError):
+                print(f"⚠️  Batch read failed, falling back: {e}")
+            # Fallback: return None so refresh logic knows it failed
+            return None
     
     def invalidate(self):
         """Force cache refresh on next request"""
@@ -354,68 +361,68 @@ def parse_telemetry_line(line: str) -> Optional[Dict]:
 
 
 def run_pod_async(pod_name: str, script_path: str):
-    """Run a pod in background and capture telemetry"""
-    print(f"Starting pod: {pod_name}")
-    
-    try:
-        env = os.environ.copy()
-        env["PYTHONUNBUFFERED"] = "1"
-        env["OUTPUT_DIR"] = str(BASE_DIR / "run_data_output")
-        env["INPUT_DIR"] = str(BASE_DIR / "run_data_output")
-        
-        if pod_name == "data-prep":
-            env["INPUT_DIR"] = str(BASE_DIR / "run_data_output")
-            env["OUTPUT_DIR"] = str(BASE_DIR / "run_features_output")
-        elif pod_name == "model-build":
-            env["INPUT_DIR"] = str(BASE_DIR / "run_features_output")
-            env["OUTPUT_DIR"] = str(BASE_DIR / "run_models_output")
-        
-        # Start process
-        process = subprocess.Popen(
-            [sys.executable, script_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            env=env,
-            cwd=str(BASE_DIR)
-        )
-        
-        state.processes[pod_name] = process
-        
-        # Read output and parse telemetry
-        for line in iter(process.stdout.readline, ''):
-            if not line:
-                break
+    """Run a pod in background and capture telemetry without blocking"""
+    def _run():
+        print(f"🚀 Starting pod: {pod_name}")
+        try:
+            env = os.environ.copy()
+            env["PYTHONUNBUFFERED"] = "1"
             
-            line = line.strip()
-            print(f"[{pod_name}] {line}")
+            # Pods use StoragePaths to find their input/output locations.
+            # We don't need to override them here unless we're in a special container context.
+            # Removing these overrides so they default to StoragePaths "auto" logic.
             
-            # Parse telemetry
-            telemetry = parse_telemetry_line(line)
-            if telemetry:
-                state.update_telemetry(
-                    stage=telemetry.get("stage", "Unknown"),
-                    status=telemetry.get("status", "Running"),
-                    rows=telemetry.get("rows", 0),
-                    throughput=telemetry.get("throughput", 0),
-                    fraud_blocked=telemetry.get("fraud_blocked"),
-                    elapsed=telemetry.get("elapsed", 0.0),
-                    cpu_percent=telemetry.get("ram_percent", 0.0),  # Using ram as proxy for CPU
-                    ram_percent=telemetry.get("ram_percent", 0.0)
-                )
-        
-        process.wait()
-        
-        if pod_name in state.processes:
-            del state.processes[pod_name]
-        
-        print(f"Pod {pod_name} completed with code {process.returncode}")
-        
-    except Exception as e:
-        print(f"Error running pod {pod_name}: {e}")
-        if pod_name in state.processes:
-            del state.processes[pod_name]
+            # Start process
+            process = subprocess.Popen(
+                [sys.executable, script_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                env=env,
+                cwd=str(BASE_DIR)
+            )
+            
+            state.processes[pod_name] = process
+            
+            # Read output and parse telemetry
+            for line in iter(process.stdout.readline, ''):
+                if not line:
+                    break
+                
+                line = line.strip()
+                # Print to console for visibility
+                print(f"[{pod_name}] {line}")
+                
+                # Parse telemetry
+                telemetry = parse_telemetry_line(line)
+                if telemetry:
+                    # Update local state so it can be picked up by the metrics loop
+                    state.update_telemetry(
+                        stage=telemetry.get("stage", "Unknown"),
+                        status=telemetry.get("status", "Running"),
+                        rows=telemetry.get("rows", 0),
+                        throughput=telemetry.get("throughput", 0),
+                        fraud_blocked=telemetry.get("fraud_blocked"),
+                        elapsed=telemetry.get("elapsed", 0.0),
+                        cpu_percent=telemetry.get("cpu_cores", 0.0),
+                        ram_percent=telemetry.get("ram_percent", 0.0)
+                    )
+            
+            process.wait()
+            if pod_name in state.processes:
+                del state.processes[pod_name]
+            print(f"✅ Pod {pod_name} completed with code {process.returncode}")
+            
+        except Exception as e:
+            print(f"❌ Error running pod {pod_name}: {e}")
+            if pod_name in state.processes:
+                del state.processes[pod_name]
+
+    # Run in a separate thread so it doesn't block FastAPI
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return thread
 
 
 async def _tail_pod_logs(pod_name: str):
@@ -496,26 +503,24 @@ async def _k8s_telemetry_loop():
 
 
 def run_pipeline_sequence():
-    """Run all 4 pods in sequence"""
+    """Run all 4 pods as background threads"""
     state.is_running = True
     state.start_time = time.time()
     
-    try:
-        # Pod 1: Data Generation
-        run_pod_async("data-gather", str(PODS_DIR / "data-gather" / "gather.py"))
-        
-        # Pod 2: Data Prep
-        run_pod_async("data-prep", str(PODS_DIR / "data-prep" / "prepare.py"))
-        
-        # Pod 3: Model Training
-        run_pod_async("model-build", str(PODS_DIR / "model-build" / "train.py"))
-        
-        # Pod 4: Inference (requires Triton on port 8001)
-        run_pod_async("inference", str(PODS_DIR / "inference" / "client.py"))
-        
-    finally:
-        state.is_running = False
-        print("Pipeline sequence completed")
+    print("🚀 Triggering pipeline sequence in background...")
+    # Pod 1: Data Generation
+    run_pod_async("data-gather", str(PODS_DIR / "data-gather" / "gather.py"))
+    
+    # Pod 2: Data Prep
+    run_pod_async("data-prep", str(PODS_DIR / "data-prep" / "prepare.py"))
+    
+    # Pod 3: Model Training
+    run_pod_async("model-build", str(PODS_DIR / "model-build" / "train.py"))
+    
+    # Pod 4: Inference (requires Triton on port 8001)
+    run_pod_async("inference", str(PODS_DIR / "inference" / "client.py"))
+    
+    # Note: is_running remains True. It will be set to False only when all processes are stopped manually.
 
 
 # ==================== API Endpoints ====================
@@ -1619,8 +1624,17 @@ async def websocket_dashboard(websocket: WebSocket):
         while True:
             try:
                 if METRICS_JSON_PATH.exists():
-                    with open(METRICS_JSON_PATH, "r") as f:
-                        data = json.load(f)
+                    try:
+                        with open(METRICS_JSON_PATH, "r") as f:
+                            data = json.load(f)
+                    except (json.JSONDecodeError, Exception) as e:
+                        # Keep current data if read fails or use idle state if first time
+                        if 'data' not in locals():
+                             data = {
+                                "cpu": [], "gpu": [], "fb": [],
+                                "kpis": {"1_fraud_exposure_identified_usd": 0, "2_transactions_analyzed": 0},
+                                "business": {"pods": {}}
+                             }
                 else:
                     data = {
                         "cpu": [], "gpu": [], "fb": [],

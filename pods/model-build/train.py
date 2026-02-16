@@ -109,9 +109,13 @@ class ModelTrainer:
         
         # NEW: Continuous mode configuration
         self.continuous_mode = os.getenv('CONTINUOUS_MODE', 'true').lower() == 'true'
-        self.training_interval = int(os.getenv('TRAINING_INTERVAL_SECONDS', '30'))  # 30 seconds (fast testing)
-        self.min_samples_for_training = int(os.getenv('MIN_SAMPLES_FOR_TRAINING', '10000'))  # 10k samples (fast testing)
+        self.training_interval = int(os.getenv('TRAINING_INTERVAL_SECONDS', '10'))  # Lowered for faster start
+        self.min_samples_for_training = int(os.getenv('MIN_SAMPLES_FOR_TRAINING', '1000')) # Lowered significantly for first model
         self.backend_url = os.getenv('BACKEND_URL', 'http://localhost:8000')
+        
+        # Debugging: Log actual paths being used
+        log.info(f"ModelTrainer Input Path:  {self.input_path.absolute()}")
+        log.info(f"ModelTrainer Output Path: {self.output_path.absolute()}")
         
         # Model versioning
         self.current_model = None

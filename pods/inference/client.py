@@ -156,10 +156,13 @@ def main():
         if cpu_model:
             log("✓ CPU inference mode enabled (real XGBoost predictions)")
         else:
-            log("⚠ No model available - will use simulation mode")
+            log("⚠ No model available yet - will wait and retry while in continuous mode")
     
     if not continuous_mode:
         # Original single-shot mode
+        if not triton_client and not cpu_model:
+             log("❌ No model available for single-shot inference")
+             sys.exit(1)
         run_single_inference(triton_client, model_name)
     else:
         # NEW: Continuous inference mode
@@ -248,9 +251,15 @@ def run_continuous_inference(triton_client, cpu_model, model_name, batch_size, q
                 # Use CPU XGBoost (real predictions)
                 results = run_cpu_inference(cpu_model, input_array)
             else:
-                # Fallback to simulation (only if no model available)
-                log("⚠ Using simulation mode (no model available)")
-                results = np.random.rand(len(messages)).astype(np.float32)
+                # Try to load model now
+                cpu_model = load_xgboost_model_cpu()
+                if cpu_model:
+                    results = run_cpu_inference(cpu_model, input_array)
+                else:
+                    # Fallback to simulation (only if no model available)
+                    # Use simulation temporarily but log it clearly
+                    log("⚠ Simulation mode (waiting for model to be trained...)")
+                    results = np.random.rand(len(messages)).astype(np.float32)
             
             # Prepare output messages and track metrics
             output_messages = []
