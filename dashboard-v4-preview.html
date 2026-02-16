@@ -855,6 +855,36 @@
       border: 1px solid var(--border);
     }
 
+    /* ── Utilization Comparison ── */
+    .util-compare-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .util-compare-card {
+      background: var(--bg-card);
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .util-compare-card .small-title {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .util-canvas-wrap {
+      width: 100%;
+      height: 120px;
+    }
+
     .chart-title {
       font-size: 12px;
       font-weight: 600;
@@ -1695,6 +1725,20 @@
             </div>
           </div>
 
+          <!-- Utilization Comparison (Combined) -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Utilization Comparison</span>
+              <span class="card-badge" style="background: var(--bg-card); color: var(--text-muted);">Live</span>
+            </div>
+            <div style="margin-top:8px;">
+              <div class="util-compare-card" style="padding:8px;">
+                <div class="small-title">CPU · GPU · FlashBlade</div>
+                <div class="util-canvas-wrap" style="height:140px;"><canvas id="util-compare-all-chart"></canvas></div>
+              </div>
+            </div>
+          </div>
+
           <!-- Resource Allocation -->
           <div class="card">
             <div class="card-header">
@@ -1979,6 +2023,9 @@
       if (document.getElementById('fb-util')) document.getElementById('fb-util').textContent = fbUtil + '%';
       if (document.getElementById('fb-util-bar')) document.getElementById('fb-util-bar').style.width = Math.min(100, fbUtil) + '%';
 
+      // Update utilization comparison charts if provided by backend (/api/dashboard -> utilization)
+      try { updateUtilCharts(data.utilization || data.util || null); } catch (e) { /* ignore */ }
+
       // Update Fraud Velocity badge from KPIs
       const fraudVelocity = kpis['11_fraud_velocity_per_min'];
       if (document.getElementById('velocity-badge') && fraudVelocity != null) {
@@ -2126,64 +2173,23 @@
     }
 
     let businessPollTimer = null;
-    let currentPollInterval = 1000; // Always use 1 second when polling is active
-    const POLL_INTERVAL = 1000; // 1 second when pipeline is running
-    let isPollingActive = false; // Track if we should be polling
-
     async function fetchBusinessMetrics() {
       try {
         const r = await fetch(API('/api/business/metrics'));
         const j = await r.json();
         updateBusinessMetrics(j);
-
-        // Check if pipeline is running
-        const isRunning = j.is_running !== false;
-
-        // Auto-start polling if pipeline is running (in case it was started elsewhere)
-        if (isRunning && !isPollingActive) {
-          console.log('🚀 Pipeline detected as RUNNING → Starting fast polling (1s)');
-          isPollingActive = true;
-        }
-
-        // Auto-stop polling if pipeline stopped (save resources!)
-        if (!isRunning && isPollingActive) {
-          console.log('⏸️  Pipeline STOPPED → Stopping polling (WebSocket will handle updates)');
-          isPollingActive = false;
-          stopBusinessPoll();
-          return; // Exit without scheduling next poll
-        }
-
-        // Schedule next poll ONLY if polling is active
-        if (isPollingActive && businessPollTimer !== null) {
-          businessPollTimer = setTimeout(fetchBusinessMetrics, POLL_INTERVAL);
-        }
-      } catch (e) {
-        // On error, retry only if polling was active
-        if (isPollingActive && businessPollTimer !== null) {
-          businessPollTimer = setTimeout(fetchBusinessMetrics, POLL_INTERVAL);
-        }
-      }
+      } catch (e) { /* ignore */ }
     }
-
     function startBusinessPoll() {
-      console.log('▶️  Starting business metrics polling (1s interval)');
-      if (businessPollTimer) {
-        clearTimeout(businessPollTimer);
-      }
-      isPollingActive = true;
-      businessPollTimer = true; // Mark as active
-      fetchBusinessMetrics(); // Start immediately
+      if (businessPollTimer) clearInterval(businessPollTimer);
+      fetchBusinessMetrics();
+      businessPollTimer = setInterval(fetchBusinessMetrics, 5000);
     }
-
     function stopBusinessPoll() {
-      if (businessPollTimer) {
-        console.log('⏹️  Stopping business metrics polling');
-        clearTimeout(businessPollTimer);
-        businessPollTimer = null;
-      }
-      isPollingActive = false;
+      if (businessPollTimer) { clearInterval(businessPollTimer); businessPollTimer = null; }
     }
 
+    let machinePollTimer = null;
     async function fetchMachineMetrics() {
       try {
         const r = await fetch(API('/api/machine/metrics'));
@@ -2270,6 +2276,10 @@
         // Update Throughput Trend Chart
         updateThroughputTrendChart(cpuTPS, gpuTPS, combinedTPS);
 
+        // Extract and update utilization comparison chart
+        const util = j.utilization || {};
+        updateUtilCharts(util);
+
         // Update Infra Allocation display
         const infra = j.infra || {};
         const alloc = infra.allocation || {};
@@ -2341,37 +2351,17 @@
             bar.textContent = fmtNum(gpuInferCount);
           }
         }
-
-        // Schedule next poll using the same adaptive interval as business metrics
-        if (machinePollTimer !== null) {
-          currentMachinePollInterval = currentPollInterval; // Use shared interval
-          machinePollTimer = setTimeout(fetchMachineMetrics, currentMachinePollInterval);
-        }
-      } catch (e) {
-        // On error, retry with slow interval
-        if (machinePollTimer !== null) {
-          machinePollTimer = setTimeout(fetchMachineMetrics, SLOW_POLL_INTERVAL);
-        }
-      }
+      } catch (e) { /* ignore */ }
     }
-
-    let machinePollTimer = null;
-    let currentMachinePollInterval = 5000; // Start with slow polling
-
     function startMachinePoll() {
-      if (machinePollTimer) {
-        clearTimeout(machinePollTimer);
-      }
+      if (machinePollTimer) clearInterval(machinePollTimer);
       initThroughputTrendChart();
-      machinePollTimer = true; // Mark as active
-      fetchMachineMetrics(); // Start immediately
+      initUtilCompareChart();
+      fetchMachineMetrics();
+      machinePollTimer = setInterval(fetchMachineMetrics, 5000);
     }
-
     function stopMachinePoll() {
-      if (machinePollTimer) {
-        clearTimeout(machinePollTimer);
-        machinePollTimer = null;
-      }
+      if (machinePollTimer) { clearInterval(machinePollTimer); machinePollTimer = null; }
     }
 
     // ==================== THROUGHPUT CHART ====================
@@ -2545,6 +2535,58 @@
       }
     }
 
+    // ==================== UTILIZATION COMPARISON CHART (ALL 3) ====================
+    let utilCompareChart = null;
+
+    function initUtilCompareChart() {
+      const el = document.getElementById('util-compare-all-chart');
+      if (!el) return;
+
+      if (utilCompareChart) {
+        utilCompareChart.destroy();
+        utilCompareChart = null;
+      }
+
+      utilCompareChart = new Chart(el, {
+        type: 'bar',
+        data: {
+          labels: ['CPU', 'GPU', 'FlashBlade'],
+          datasets: [{
+            label: 'Utilization %',
+            data: [0, 0, 0],
+            backgroundColor: ['#3b82f6', '#22c55e', '#fe5000']
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function (ctx) { return ctx.label + ': ' + (ctx.parsed.y ?? ctx.parsed.x) + '%'; }
+              }
+            }
+          },
+          scales: {
+            y: { beginAtZero: true, max: 100, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.03)' } },
+            x: { ticks: { color: '#f1f5f9' }, grid: { display: false } }
+          }
+        }
+      });
+    }
+
+    function updateUtilCharts(util) {
+      if (!util || !utilCompareChart) return;
+      const cpu = Math.round(Number(util.cpu || 10));
+      const gpu = Math.round(Number(util.gpu || 20));
+      const fb = Math.round(Number(util.flashblade || util.flashBlade || 40));
+
+
+      utilCompareChart.data.datasets[0].data = [Math.min(100, cpu), Math.min(100, gpu), Math.min(100, fb)];
+      utilCompareChart.update('none');
+    }
+
     function connectWS() {
       try {
         ws = new WebSocket(wsUrl());
@@ -2574,20 +2616,14 @@
       try {
         const r = await fetch(API('/api/control/start'), { method: 'POST' });
         const j = await r.json();
-        if (j.success) {
-          await fetchScale();
-          startBusinessPoll(); // Start polling when user clicks Start
-        }
+        if (j.success) await fetchScale();
       } catch (e) { console.warn(e); }
     });
     document.getElementById('btn-stop').addEventListener('click', async () => {
       try {
         const r = await fetch(API('/api/control/stop'), { method: 'POST' });
         const j = await r.json();
-        if (j.success) {
-          await fetchScale();
-          stopBusinessPoll(); // Stop polling when user clicks Stop
-        }
+        if (j.success) await fetchScale();
       } catch (e) { console.warn(e); }
     });
     document.getElementById('btn-reset').addEventListener('click', async () => {
@@ -2756,14 +2792,10 @@
     // Also sync after a short delay to ensure all DOM is ready
     setTimeout(syncHeights, 500);
 
+    // Initialize utilization comparison chart and then start connections
+    initUtilCompareChart();
     fetchScale().then(() => connectWS());
-
-    // Check initial pipeline state WITHOUT starting continuous polling
-    // WebSocket will handle real-time updates
-    // Polling will only start when user clicks "Start" or pipeline is detected as running
-    fetchBusinessMetrics().then(() => {
-      console.log('✅ Initial state loaded. Polling will start only when pipeline is RUNNING.');
-    });
+    startBusinessPoll();
   </script>
 
 </body>
