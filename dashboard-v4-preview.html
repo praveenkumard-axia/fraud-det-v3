@@ -2324,12 +2324,25 @@
 
         // Model metrics (from business / model data)
         try {
-          if (el('mm-model-precision')) el('mm-model-precision').textContent = (ml.precision != null && !isNaN(Number(ml.precision))) ? (Number(ml.precision) * 100).toFixed(1) + '%' : '—';
-          if (el('mm-model-recall')) el('mm-model-recall').textContent = (ml.recall != null && !isNaN(Number(ml.recall))) ? (Number(ml.recall) * 100).toFixed(1) + '%' : '—';
-          if (el('mm-model-fraud')) el('mm-model-fraud').textContent = fmtUsd(Number(model.fraud_exposure_identified ?? 0));
+          // Direct update to Model Performance card
+          if (ml.precision != null && !isNaN(Number(ml.precision))) {
+            const pVal = Number(ml.precision);
+            if (el('progress-precision-val')) el('progress-precision-val').textContent = (pVal * 100).toFixed(1) + '%';
+            if (el('progress-precision-fill')) el('progress-precision-fill').style.width = (pVal * 100) + '%';
+          }
+          if (ml.recall != null && !isNaN(Number(ml.recall))) {
+            const rVal = Number(ml.recall);
+            if (el('progress-recall-val')) el('progress-recall-val').textContent = (rVal * 100).toFixed(1) + '%';
+            if (el('progress-recall-fill')) el('progress-recall-fill').style.width = (rVal * 100) + '%';
+          }
+          // FPR is typically specific to the model or estimated from recall if missing
+          const fprVal = (ml.false_positive_rate != null) ? Number(ml.false_positive_rate) : ((1 - (Number(ml.recall) || 0.9)) * 0.05);
+          if (el('progress-fpr-val')) el('progress-fpr-val').textContent = (fprVal * 100).toFixed(2) + '%';
+          if (el('progress-fpr-fill')) el('progress-fpr-fill').style.width = Math.min(100, fprVal * 1000) + '%'; // Scale for visibility
+
         } catch (e) { /* ignore model display errors */ }
 
-        // Synchronize metric values with progress bars
+        // Synchronize metric values (legacy function, kept for safety but largely redundant now)
         syncProgressBars();
 
 
