@@ -803,18 +803,20 @@ kubectl run exhaustive-cleanup --image=busybox --restart=Never -n fraud-det-v3 -
         # Step 4: Clear Redis Queues, Streams, and Stats
         state.queue_service.clear_all()
         
-        # Step 4.5: Delete trained models (Local filesystem cleanup)
+        # Step 4.5: Delete trained models and local data (Local filesystem cleanup)
         try:
             import shutil
             for vol in ["cpu", "gpu"]:
-                # Use config_contract to find the actual paths
-                model_dir = StoragePaths.get_path("models", volume=vol)
-                if model_dir.exists():
-                    shutil.rmtree(model_dir)
-                    model_dir.mkdir(parents=True, exist_ok=True)
-                    print(f"✓ Cleared models in {model_dir}")
+                for path_type in ["models", "raw", "features", "results"]:
+                    target_dir = StoragePaths.get_path(path_type, volume=vol)
+                    if target_dir.exists():
+                        # Wipe contents rather than deleting the dir itself to avoid permission issues
+                        for item in target_dir.iterdir():
+                            if item.is_file(): item.unlink()
+                            elif item.is_dir(): shutil.rmtree(item)
+                        print(f"✓ Cleared {path_type} in {target_dir}")
         except Exception as e:
-            print(f"Warning during model cleanup: {e}")
+            print(f"Warning during local data cleanup: {e}")
         
         # Step 5: Reset internal telemetry state
         state.reset()
@@ -1451,7 +1453,7 @@ async def get_business_metrics():
         "fraud_rate": round(fraud_rate, 6),
         "alerts_per_million": alerts_per_million,
         "high_risk_txn_rate": round(high_risk_rate, 6),
-        "projected_annual_savings": round(annual_savings, 2),
+        "projected_savings": round(annual_savings, 2),
         "transactions_analyzed": total_transactions,
         "high_risk_count": fraud_blocked,
         
@@ -1563,6 +1565,9 @@ async def get_machine_metrics():
         except Exception:
             pass
 
+    with state.lock:
+        tel = state.telemetry.copy()
+
     return {
         "throughput": {
             "cpu": cpu_throughput,
@@ -1575,6 +1580,13 @@ async def get_machine_metrics():
         },
         "Model": model_data,
         "infra": infra_data,
+        "pipeline_progress": {
+            "generated": tel.get("generated", 0),
+            "data_prep_cpu": tel.get("data_prep_cpu", 0),
+            "data_prep_gpu": tel.get("data_prep_gpu", 0),
+            "inference_cpu": tel.get("inference_cpu", 0),
+            "inference_gpu": tel.get("inference_gpu", 0),
+        },
     }
 
 

@@ -1035,7 +1035,7 @@
         </div>
         <div class="metric-box">
           <div class="metric-value" id="kpi-annual-savings" style="color: var(--green);">$0</div>
-          <div class="metric-label">Projected Annual Savings</div>
+          <div class="metric-label">Projected Savings</div>
           <div class="metric-change" style="color: var(--text-muted);">at current detection rate</div>
         </div>
       </div>
@@ -1617,45 +1617,90 @@
               <span class="card-title">Machine Metrics</span>
               <span class="card-badge" style="background: var(--purple-dim); color: var(--purple);">Prometheus</span>
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px;">
-              <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--blue);"
-                  id="mm-cpu">0</div>
-                <div style="font-size: 10px; color: var(--text-muted);">CPU txns/s</div>
+
+            <div style="display:grid; gap:12px;">
+
+              <!-- CPU vs GPU -->
+              <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px;">
+                <div style="font-size:11px; color:var(--text-muted); font-weight:600; margin-bottom:8px;">CPU vs GPU
+                </div>
+                <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                  <thead>
+                    <tr style="color:var(--text-muted); text-transform:uppercase; font-size:10px;">
+                      <th style="text-align:left; padding:6px 4px;">Metric</th>
+                      <th style="text-align:right; padding:6px 4px;">CPU</th>
+                      <th style="text-align:right; padding:6px 4px;">GPU</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr style="border-top:1px solid var(--border);">
+                      <td style="padding:6px 4px;">Throughput (TPS)</td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-cpu-tps">—</td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-gpu-tps">—</td>
+                    </tr>
+                    <tr style="border-top:1px solid var(--border);">
+                      <td style="padding:6px 4px;">Utilization (%)</td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-cpu-util">—</td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-gpu-util">—</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-              <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--green);"
-                  id="mm-gpu">0</div>
-                <div style="font-size: 10px; color: var(--text-muted);">GPU txns/s</div>
+
+              <!-- CPU vs FlashBlade -->
+              <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px;">
+                <div style="font-size:11px; color:var(--text-muted); font-weight:600; margin-bottom:8px;">CPU vs
+                  FlashBlade CPU</div>
+                <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                  <thead>
+                    <tr style="color:var(--text-muted); text-transform:uppercase; font-size:10px;">
+                      <th style="text-align:left; padding:6px 4px;">Metric</th>
+                      <th style="text-align:right; padding:6px 4px;">CPU</th>
+                      <th style="text-align:right; padding:6px 4px;">FlashBlade CPU</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr style="border-top:1px solid var(--border);">
+                      <td style="padding:6px 4px;">Throughput</td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-cpu2-tps">—</td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-fb-mbps">—</td>
+                    </tr>
+                    <tr style="border-top:1px solid var(--border);">
+                      <td style="padding:6px 4px;">Utilization (%)</td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-cpu2-util">—</td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-fb-util">—</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-              <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--orange);"
-                  id="mm-fb">0</div>
-                <div style="font-size: 10px; color: var(--text-muted);">FB MB/s</div>
+
+              <!-- GPU vs FlashBlade -->
+              <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px;">
+                <div style="font-size:11px; color:var(--text-muted); font-weight:600; margin-bottom:8px;">GPU vs
+                  FlashBlade GPU</div>
+                <table style="width:100%; border-collapse:collapse; font-size:11px;">
+                  <thead>
+                    <tr style="color:var(--text-muted); text-transform:uppercase; font-size:10px;">
+                      <th style="text-align:left; padding:6px 4px;">Metric</th>
+                      <th style="text-align:right; padding:6px 4px;">GPU</th>
+                      <th style="text-align:right; padding:6px 4px;">FlashBlade GPU</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr style="border-top:1px solid var(--border);">
+                      <td style="padding:6px 4px;">Throughput</td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-gpu2-tps">—</td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-fb2-mbps">—</td>
+                    </tr>
+                    <tr style="border-top:1px solid var(--border);">
+                      <td style="padding:6px 4px;">Utilization (%)</td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-gpu2-util">—</td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-fb2-util">—</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
-              <div style="background: var(--bg-card); border-radius: 4px; padding: 8px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--blue);"
-                  id="mm-fb-read">0MB/s</div>
-                <div style="font-size: 9px; color: var(--text-muted);">FlashBlade Read</div>
-              </div>
-              <div style="background: var(--bg-card); border-radius: 4px; padding: 8px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--green);"
-                  id="mm-fb-write">0MB/s</div>
-                <div style="font-size: 9px; color: var(--text-muted);">FlashBlade Write</div>
-              </div>
-            </div>
-            <div class="sep"></div>
-            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">Model (from
-              /api/business/metrics)</div>
-            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-              <span style="font-size: 10px;">Prec: <span id="mm-model-precision"
-                  style="font-family: var(--mono); font-weight: 600;">—</span></span>
-              <span style="font-size: 10px;">Recall: <span id="mm-model-recall"
-                  style="font-family: var(--mono); font-weight: 600;">—</span></span>
-              <span style="font-size: 10px;">Fraud $: <span id="mm-model-fraud"
-                  style="font-family: var(--mono); font-weight: 600;">—</span></span>
+
             </div>
           </div>
 
@@ -1814,6 +1859,34 @@
       return formatNumberSmooth(n);
     }
 
+    // Helper for raw numbers with commas
+    function fmtRaw(n) {
+      return Math.round(n || 0).toLocaleString();
+    }
+
+    // NEW: Dynamic progress bar with 1M range wrapping
+    function updateDynamicBar(barId, labelId, value) {
+      const bar = el(barId);
+      const label = el(labelId);
+      if (!bar) return;
+
+      const rangeSize = 1000000;
+      const bracket = Math.floor(Math.max(0, value - 1) / rangeSize);
+      const target = (bracket + 1) * rangeSize;
+      const labelText = `${fmtRaw(value)} / ${fmtRaw(target)}`;
+
+      // Label always shows "current / target"
+      if (label) label.textContent = labelText;
+
+      let pct = ((value % rangeSize) / rangeSize) * 100;
+      if (value > 0 && value % rangeSize === 0) pct = 100;
+
+      // Bar text shows percentage
+      bar.textContent = pct.toFixed(1) + '%';
+
+      bar.style.width = Math.max(value > 0 ? 0.5 : 0, pct) + '%';
+    }
+
     // ==================== TAB SWITCHING ====================
 
     function switchTab(tab) {
@@ -1837,7 +1910,6 @@
       }, 100);
     }
 
-    // ==================== MODEL PERFORMANCE SYNC ====================
     // Synchronize metric values with progress bars
     function syncProgressBars() {
       const precisionEl = el('mm-model-precision');
@@ -1992,33 +2064,12 @@
 
       // Only update Pipeline Progress if we have non-zero data (prevent resetting to zero)
       if (generated > 0 || prepTotal > 0) {
-        if (document.getElementById('tech-generated')) document.getElementById('tech-generated').textContent = fmtNum(generated) + ' txns';
-        if (document.getElementById('tech-generated-bar')) {
-          const bar = document.getElementById('tech-generated-bar');
-          const pct = Math.min(100, (generated / maxVal) * 100);
-          bar.style.width = pct + '%'; bar.textContent = fmtNum(generated);
-        }
-        if (document.getElementById('tech-prep-cpu')) document.getElementById('tech-prep-cpu').textContent = fmtNum(Math.floor(prepTotal * 0.4));
-        if (document.getElementById('tech-prep-cpu-bar')) {
-          const bar = document.getElementById('tech-prep-cpu-bar');
-          bar.style.width = Math.min(100, (prepTotal / maxVal) * 100) + '%'; bar.textContent = fmtNum(Math.floor(prepTotal * 0.4));
-        }
-        if (document.getElementById('tech-prep-gpu')) document.getElementById('tech-prep-gpu').textContent = fmtNum(Math.floor(prepTotal * 0.6));
-        if (document.getElementById('tech-prep-gpu-bar')) {
-          const bar = document.getElementById('tech-prep-gpu-bar');
-          bar.style.width = Math.min(100, (prepTotal / maxVal) * 100) + '%'; bar.textContent = fmtNum(Math.floor(prepTotal * 0.6));
-        }
+        updateDynamicBar('tech-generated-bar', 'tech-generated', generated);
+        updateDynamicBar('tech-prep-cpu-bar', 'tech-prep-cpu', Math.floor(prepTotal * 0.4));
+        updateDynamicBar('tech-prep-gpu-bar', 'tech-prep-gpu', Math.floor(prepTotal * 0.6));
         const infTotal = (inf.fraud || 0) + (inf.non_fraud || 0) || b.no_of_processed || 0;
-        if (document.getElementById('tech-infer-cpu')) document.getElementById('tech-infer-cpu').textContent = fmtNum(Math.floor(infTotal * 0.3));
-        if (document.getElementById('tech-infer-cpu-bar')) {
-          const bar = document.getElementById('tech-infer-cpu-bar');
-          bar.style.width = Math.min(100, (infTotal / maxVal) * 100) + '%'; bar.textContent = fmtNum(Math.floor(infTotal * 0.3));
-        }
-        if (document.getElementById('tech-infer-gpu')) document.getElementById('tech-infer-gpu').textContent = fmtNum(Math.floor(infTotal * 0.7));
-        if (document.getElementById('tech-infer-gpu-bar')) {
-          const bar = document.getElementById('tech-infer-gpu-bar');
-          bar.style.width = Math.min(100, (infTotal / maxVal) * 100) + '%'; bar.textContent = fmtNum(Math.floor(infTotal * 0.7));
-        }
+        updateDynamicBar('tech-infer-cpu-bar', 'tech-infer-cpu', Math.floor(infTotal * 0.3));
+        updateDynamicBar('tech-infer-gpu-bar', 'tech-infer-gpu', Math.floor(infTotal * 0.7));
       }
       if (document.getElementById('tech-backlog')) document.getElementById('tech-backlog').textContent = 'Backlog: ' + fmtNum(rawBacklog);
 
@@ -2242,6 +2293,35 @@
         if (el('mm-fb')) el('mm-fb').textContent = fbVal.toFixed(1);
         if (el('mm-fb-read')) el('mm-fb-read').textContent = (fb.read ?? '0MB/s');
         if (el('mm-fb-write')) el('mm-fb-write').textContent = (fb.write ?? '0MB/s');
+
+        // NEW: Populate Detailed Machine Metrics Tables
+        const u = j.utilization || {};
+        const cpuU = Math.round(Number(u.cpu || 0));
+        const gpuU = Math.round(Number(u.gpu || 0));
+        const fbU = Math.round(Number(u.flashblade || u.flashBlade || 0));
+
+        // Parse FB strings "123.4MB/s" to numbers
+        const fbReadNum = parseFloat(fb.read) || 0;
+        const fbWriteNum = parseFloat(fb.write) || 0;
+
+        // CPU vs GPU
+        if (el('tbl-cpu-tps')) el('tbl-cpu-tps').textContent = fmtNum(cpuVal);
+        if (el('tbl-gpu-tps')) el('tbl-gpu-tps').textContent = fmtNum(gpuVal);
+        if (el('tbl-cpu-util')) el('tbl-cpu-util').textContent = cpuU + '%';
+        if (el('tbl-gpu-util')) el('tbl-gpu-util').textContent = gpuU + '%';
+
+        // CPU vs FlashBlade (CPU handles ~30% of read load)
+        if (el('tbl-cpu2-tps')) el('tbl-cpu2-tps').textContent = fmtNum(cpuVal);
+        if (el('tbl-fb-mbps')) el('tbl-fb-mbps').textContent = (fbReadNum * 0.3).toFixed(1) + ' MB/s';
+        if (el('tbl-cpu2-util')) el('tbl-cpu2-util').textContent = cpuU + '%';
+        if (el('tbl-fb-util')) el('tbl-fb-util').textContent = fbU + '%';
+
+        // GPU vs FlashBlade (GPU handles ~70% of read + 100% of write)
+        if (el('tbl-gpu2-tps')) el('tbl-gpu2-tps').textContent = fmtNum(gpuVal);
+        if (el('tbl-fb2-mbps')) el('tbl-fb2-mbps').textContent = (fbReadNum * 0.7 + fbWriteNum).toFixed(1) + ' MB/s';
+        if (el('tbl-gpu2-util')) el('tbl-gpu2-util').textContent = gpuU + '%';
+        if (el('tbl-fb2-util')) el('tbl-fb2-util').textContent = fbU + '%';
+
         // Model metrics (from business / model data)
         try {
           if (el('mm-model-precision')) el('mm-model-precision').textContent = (ml.precision != null && !isNaN(Number(ml.precision))) ? (Number(ml.precision) * 100).toFixed(1) + '%' : '—';
@@ -2315,62 +2395,24 @@
           `).join('');
         }
 
-        // Update Pipeline Progress bars using Model data
-        // Use transactions_analyzed to derive progress stages
-        const txnsAnalyzed = model.transactions_analyzed || 0;
-        const highRiskCount = metadata.high_risk_count || (model.high_risk_txn_rate * txnsAnalyzed) || 0;
+        // Update Pipeline Progress bars (Real-time telemetry preferred over estimation)
+        const prog = j.pipeline_progress || {};
+        const realGenerated = prog.generated || 0;
+        const realPrep = (prog.data_prep_cpu || 0) + (prog.data_prep_gpu || 0);
 
-        // Estimate stage counts (Generator produces ~10% more than analyzed due to backlog)
-        const generated = Math.round(txnsAnalyzed * 1.1);
-        const prepTotal = txnsAnalyzed;
-        const infTotal = txnsAnalyzed;
-        const maxPipelineVal = Math.max(generated, prepTotal, 1);
-
-        // Update Pipeline Progress if we have data
-        if (txnsAnalyzed > 0) {
-          if (el('tech-generated')) el('tech-generated').textContent = fmtNum(generated) + ' txns';
-          if (el('tech-generated-bar')) {
-            const bar = el('tech-generated-bar');
-            const pct = Math.min(100, (generated / maxPipelineVal) * 100);
-            bar.style.width = pct + '%';
-            bar.textContent = fmtNum(generated);
-          }
-
-          // CPU Prep (30% of total)
-          const cpuPrepCount = Math.floor(prepTotal * 0.3);
-          if (el('tech-prep-cpu')) el('tech-prep-cpu').textContent = fmtNum(cpuPrepCount);
-          if (el('tech-prep-cpu-bar')) {
-            const bar = el('tech-prep-cpu-bar');
-            bar.style.width = Math.min(100, (prepTotal / maxPipelineVal) * 100) + '%';
-            bar.textContent = fmtNum(cpuPrepCount);
-          }
-
-          // GPU Prep (70% of total)
-          const gpuPrepCount = Math.floor(prepTotal * 0.7);
-          if (el('tech-prep-gpu')) el('tech-prep-gpu').textContent = fmtNum(gpuPrepCount);
-          if (el('tech-prep-gpu-bar')) {
-            const bar = el('tech-prep-gpu-bar');
-            bar.style.width = Math.min(100, (prepTotal / maxPipelineVal) * 100) + '%';
-            bar.textContent = fmtNum(gpuPrepCount);
-          }
-
-          // CPU Inference (30% of total)
-          const cpuInferCount = Math.floor(infTotal * 0.3);
-          if (el('tech-infer-cpu')) el('tech-infer-cpu').textContent = fmtNum(cpuInferCount);
-          if (el('tech-infer-cpu-bar')) {
-            const bar = el('tech-infer-cpu-bar');
-            bar.style.width = Math.min(100, (infTotal / maxPipelineVal) * 100) + '%';
-            bar.textContent = fmtNum(cpuInferCount);
-          }
-
-          // GPU Inference (70% of total)
-          const gpuInferCount = Math.floor(infTotal * 0.7);
-          if (el('tech-infer-gpu')) el('tech-infer-gpu').textContent = fmtNum(gpuInferCount);
-          if (el('tech-infer-gpu-bar')) {
-            const bar = el('tech-infer-gpu-bar');
-            bar.style.width = Math.min(100, (infTotal / maxPipelineVal) * 100) + '%';
-            bar.textContent = fmtNum(gpuInferCount);
-          }
+        if (realGenerated > 0 || realPrep > 0) {
+          updateDynamicBar('tech-generated-bar', 'tech-generated', realGenerated);
+          updateDynamicBar('tech-prep-cpu-bar', 'tech-prep-cpu', prog.data_prep_cpu || 0);
+          updateDynamicBar('tech-prep-gpu-bar', 'tech-prep-gpu', prog.data_prep_gpu || 0);
+          updateDynamicBar('tech-infer-cpu-bar', 'tech-infer-cpu', prog.inference_cpu || 0);
+          updateDynamicBar('tech-infer-gpu-bar', 'tech-infer-gpu', prog.inference_gpu || 0);
+        } else if (txnsAnalyzed > 0) {
+          const estGenerated = Math.round(txnsAnalyzed * 1.1);
+          updateDynamicBar('tech-generated-bar', 'tech-generated', estGenerated);
+          updateDynamicBar('tech-prep-cpu-bar', 'tech-prep-cpu', Math.floor(txnsAnalyzed * 0.4));
+          updateDynamicBar('tech-prep-gpu-bar', 'tech-prep-gpu', Math.floor(txnsAnalyzed * 0.6));
+          updateDynamicBar('tech-infer-cpu-bar', 'tech-infer-cpu', Math.floor(txnsAnalyzed * 0.3));
+          updateDynamicBar('tech-infer-gpu-bar', 'tech-infer-gpu', Math.floor(txnsAnalyzed * 0.7));
         }
       } catch (e) { /* ignore */ }
     }
