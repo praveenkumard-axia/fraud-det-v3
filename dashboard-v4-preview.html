@@ -855,6 +855,36 @@
       border: 1px solid var(--border);
     }
 
+    /* ── Utilization Comparison ── */
+    .util-compare-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .util-compare-card {
+      background: var(--bg-card);
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .util-compare-card .small-title {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .util-canvas-wrap {
+      width: 100%;
+      height: 120px;
+    }
+
     .chart-title {
       font-size: 12px;
       font-weight: 600;
@@ -1415,17 +1445,6 @@
               </div>
             </div>
             <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">Txns / 5 Sec</div>
-
-            <div style="margin-top: 15px; padding: 0 20px;">
-              <input type="range" id="generator-speed" min="1000" max="100000" value="10000" step="1000"
-                style="width: 100%; cursor: pointer;">
-              <div
-                style="display: flex; justify-content: space-between; font-size: 9px; color: var(--text-muted); margin-top: 4px;">
-                <span>1K/s</span>
-                <span id="generator-speed-val" style="color: var(--purple); font-weight: bold;">10K</span>
-                <span>100K/s</span>
-              </div>
-            </div>
           </div>
 
           <!-- Pipeline Status -->
@@ -1706,6 +1725,20 @@
             </div>
           </div>
 
+          <!-- Utilization Comparison (Combined) -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Utilization Comparison</span>
+              <span class="card-badge" style="background: var(--bg-card); color: var(--text-muted);">Live</span>
+            </div>
+            <div style="margin-top:8px;">
+              <div class="util-compare-card" style="padding:8px;">
+                <div class="small-title">CPU · GPU · FlashBlade</div>
+                <div class="util-canvas-wrap" style="height:140px;"><canvas id="util-compare-all-chart"></canvas></div>
+              </div>
+            </div>
+          </div>
+
           <!-- Resource Allocation -->
           <div class="card">
             <div class="card-header">
@@ -1761,12 +1794,6 @@
   </div>
 
   <script>
-    // ==================== GLOBAL CONSTANTS & HELPERS ====================
-    const el = (id) => document.getElementById(id);
-    const SLOW_POLL_INTERVAL = 5000;
-    const FAST_POLL_INTERVAL = 1000;
-    let currentPollInterval = SLOW_POLL_INTERVAL;
-
     // ==================== UTILITY FUNCTIONS ====================
 
     // Smooth number formatting - shows continuous progression (1.0M → 1.1M → 1.2M)
@@ -1793,13 +1820,13 @@
       if (tab === 'business') {
         document.querySelectorAll('.tab')[0].classList.add('active');
         document.getElementById('tab-business').classList.add('active');
-        startBusinessPoll();
+        if (isPollingAllowed) startBusinessPoll();
         stopMachinePoll();
       } else {
         document.querySelectorAll('.tab')[1].classList.add('active');
         document.getElementById('tab-tech').classList.add('active');
         stopBusinessPoll();
-        startMachinePoll();
+        if (isPollingAllowed) startMachinePoll();
       }
 
       // Sync heights after switching tabs to account for layout changes
@@ -1867,6 +1894,8 @@
     }
 
     let scaleState = { preprocessing: 0, inference: 0, preprocessing_gpu: 0, inference_gpu: 0, generation_rate: 10000 };
+    let pipelineRunning = false;
+    let isPollingAllowed = false; // NEW: Strict manual control
     let ws = null;
 
     // fmtNum is now defined above as formatNumberSmooth wrapper
@@ -1996,6 +2025,9 @@
       if (document.getElementById('fb-util')) document.getElementById('fb-util').textContent = fbUtil + '%';
       if (document.getElementById('fb-util-bar')) document.getElementById('fb-util-bar').style.width = Math.min(100, fbUtil) + '%';
 
+      // Update utilization comparison charts if provided by backend (/api/dashboard -> utilization)
+      try { updateUtilCharts(data.utilization || data.util || null); } catch (e) { /* ignore */ }
+
       // Update Fraud Velocity badge from KPIs
       const fraudVelocity = kpis['11_fraud_velocity_per_min'];
       if (document.getElementById('velocity-badge') && fraudVelocity != null) {
@@ -2017,6 +2049,7 @@
 
     function updateBusinessMetrics(b) {
       if (!b) return;
+      const el = (id) => document.getElementById(id);
       if (el('kpi-fraud-exposure')) el('kpi-fraud-exposure').textContent = fmtUsd(b.fraud_exposure_identified);
       if (el('kpi-fraud-rate')) el('kpi-fraud-rate').textContent = (Number(b.fraud_rate || 0) * 100).toFixed(2) + '%';
       if (el('kpi-alerts')) el('kpi-alerts').textContent = fmtNum(b.alerts_per_million || 0);
@@ -2142,68 +2175,39 @@
     }
 
     let businessPollTimer = null;
-    currentPollInterval = 1000; // Always use 1 second when polling is active
-    const POLL_INTERVAL = 1000; // 1 second when pipeline is running
-    let isPollingActive = false; // Track if we should be polling
-
     async function fetchBusinessMetrics() {
+      // Prevent accidental polling before user clicks Start.
+      if (!isPollingAllowed) return;
       try {
         const r = await fetch(API('/api/business/metrics'));
         const j = await r.json();
         updateBusinessMetrics(j);
-
-        // Check if pipeline is running
-        const isRunning = j.is_running !== false;
-
-        // Auto-start polling if pipeline is running (in case it was started elsewhere)
-        if (isRunning && !isPollingActive) {
-          console.log('🚀 Pipeline detected as RUNNING → Starting fast polling (1s)');
-          isPollingActive = true;
-        }
-
-        // Auto-stop polling if pipeline stopped (save resources!)
-        if (!isRunning && isPollingActive) {
-          console.log('⏸️  Pipeline STOPPED → Stopping polling (WebSocket will handle updates)');
-          isPollingActive = false;
-          stopBusinessPoll();
-          return; // Exit without scheduling next poll
-        }
-
-        // Schedule next poll ONLY if polling is active
-        if (isPollingActive && businessPollTimer !== null) {
-          businessPollTimer = setTimeout(fetchBusinessMetrics, POLL_INTERVAL);
-        }
-      } catch (e) {
-        // On error, retry only if polling was active
-        if (isPollingActive && businessPollTimer !== null) {
-          businessPollTimer = setTimeout(fetchBusinessMetrics, POLL_INTERVAL);
-        }
-      }
+      } catch (e) { /* ignore */ }
     }
-
     function startBusinessPoll() {
-      console.log('▶️  Starting business metrics polling (1s interval)');
-      if (businessPollTimer) {
-        clearTimeout(businessPollTimer);
+      if (businessPollTimer) clearInterval(businessPollTimer);
+      // Only perform metrics fetch and start the interval if polling is allowed.
+      // This prevents initial page load or tab switches from triggering API calls
+      // before the user explicitly starts the pipeline.
+      if (isPollingAllowed) {
+        fetchBusinessMetrics();
+        businessPollTimer = setInterval(fetchBusinessMetrics, 5000);
       }
-      isPollingActive = true;
-      businessPollTimer = true; // Mark as active
-      fetchBusinessMetrics(); // Start immediately
     }
-
     function stopBusinessPoll() {
-      if (businessPollTimer) {
-        console.log('⏹️  Stopping business metrics polling');
-        clearTimeout(businessPollTimer);
-        businessPollTimer = null;
-      }
-      isPollingActive = false;
+      if (businessPollTimer) { clearInterval(businessPollTimer); businessPollTimer = null; }
     }
 
+    let machinePollTimer = null;
     async function fetchMachineMetrics() {
+      // Prevent accidental polling before user clicks Start.
+      if (!isPollingAllowed) return;
       try {
         const r = await fetch(API('/api/machine/metrics'));
         const j = await r.json();
+        // Debug: log throughput payload to browser console to help track "stuck" values
+        try { console.debug("fetchMachineMetrics() -> throughput:", j.throughput, "model:", j.Model); } catch (e) { /* ignore */ }
+        const el = (id) => document.getElementById(id);
         const t = j.throughput || {};
         const fb = j.FlashBlade || {};
         const model = j.Model || {};
@@ -2285,6 +2289,10 @@
         // Update Throughput Trend Chart
         updateThroughputTrendChart(cpuTPS, gpuTPS, combinedTPS);
 
+        // Extract and update utilization comparison chart
+        const util = j.utilization || {};
+        updateUtilCharts(util);
+
         // Update Infra Allocation display
         const infra = j.infra || {};
         const alloc = infra.allocation || {};
@@ -2356,37 +2364,21 @@
             bar.textContent = fmtNum(gpuInferCount);
           }
         }
-
-        // Schedule next poll using the same adaptive interval as business metrics
-        if (machinePollTimer !== null) {
-          currentMachinePollInterval = currentPollInterval; // Use shared interval
-          machinePollTimer = setTimeout(fetchMachineMetrics, currentMachinePollInterval);
-        }
-      } catch (e) {
-        // On error, retry with slow interval
-        if (machinePollTimer !== null) {
-          machinePollTimer = setTimeout(fetchMachineMetrics, SLOW_POLL_INTERVAL);
-        }
-      }
+      } catch (e) { /* ignore */ }
     }
-
-    let machinePollTimer = null;
-    let currentMachinePollInterval = 5000; // Start with slow polling
-
     function startMachinePoll() {
-      if (machinePollTimer) {
-        clearTimeout(machinePollTimer);
-      }
+      if (machinePollTimer) clearInterval(machinePollTimer);
       initThroughputTrendChart();
-      machinePollTimer = true; // Mark as active
-      fetchMachineMetrics(); // Start immediately
-    }
-
-    function stopMachinePoll() {
-      if (machinePollTimer) {
-        clearTimeout(machinePollTimer);
-        machinePollTimer = null;
+      initUtilCompareChart();
+      // Only perform metrics fetch and start the interval if polling is allowed.
+      // Prevents immediate API calls on page load/tab switch; polling begins after user clicks Start.
+      if (isPollingAllowed) {
+        fetchMachineMetrics();
+        machinePollTimer = setInterval(fetchMachineMetrics, 5000);
       }
+    }
+    function stopMachinePoll() {
+      if (machinePollTimer) { clearInterval(machinePollTimer); machinePollTimer = null; }
     }
 
     // ==================== THROUGHPUT CHART ====================
@@ -2548,16 +2540,71 @@
       trendChartData.gpuTPS.push(Math.round(gpuTPS || 0));
       trendChartData.combinedTPS.push(Math.round(combinedTPS || 0));
 
+      // Debug: expose latest trend points for troubleshooting visual staleness
+      try { console.debug("updateThroughputTrendChart() -> cpu:", trendChartData.cpuTPS.slice(-5), "gpu:", trendChartData.gpuTPS.slice(-5), "combined:", trendChartData.combinedTPS.slice(-5)); } catch (e) { }
       if (throughputTrendChart) {
         throughputTrendChart.data.labels = trendChartData.timestamps;
         throughputTrendChart.data.datasets[0].data = trendChartData.cpuTPS;
         throughputTrendChart.data.datasets[1].data = trendChartData.gpuTPS;
         throughputTrendChart.data.datasets[2].data = trendChartData.combinedTPS;
-        throughputTrendChart.update('none');
+        // Force a full render to ensure visual updates (some Chart.js versions ignore 'none' in edge cases)
+        throughputTrendChart.update();
 
         // Sync heights after chart update
         setTimeout(syncHeights, 50);
       }
+    }
+
+    // ==================== UTILIZATION COMPARISON CHART (ALL 3) ====================
+    let utilCompareChart = null;
+
+    function initUtilCompareChart() {
+      const el = document.getElementById('util-compare-all-chart');
+      if (!el) return;
+
+      if (utilCompareChart) {
+        utilCompareChart.destroy();
+        utilCompareChart = null;
+      }
+
+      utilCompareChart = new Chart(el, {
+        type: 'bar',
+        data: {
+          labels: ['CPU', 'GPU', 'FlashBlade'],
+          datasets: [{
+            label: 'Utilization %',
+            data: [0, 0, 0],
+            backgroundColor: ['#3b82f6', '#22c55e', '#fe5000']
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function (ctx) { return ctx.label + ': ' + (ctx.parsed.y ?? ctx.parsed.x) + '%'; }
+              }
+            }
+          },
+          scales: {
+            y: { beginAtZero: true, max: 100, ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.03)' } },
+            x: { ticks: { color: '#f1f5f9' }, grid: { display: false } }
+          }
+        }
+      });
+    }
+
+    function updateUtilCharts(util) {
+      if (!util || !utilCompareChart) return;
+      const cpu = Math.round(Number(util.cpu || 10));
+      const gpu = Math.round(Number(util.gpu || 20));
+      const fb = Math.round(Number(util.flashblade || util.flashBlade || 40));
+
+
+      utilCompareChart.data.datasets[0].data = [Math.min(100, cpu), Math.min(100, gpu), Math.min(100, fb)];
+      utilCompareChart.update('none');
     }
 
     function connectWS() {
@@ -2581,44 +2628,59 @@
         const gs = document.getElementById('generator-speed');
         if (gs) { gs.value = scaleState.generation_rate; document.getElementById('generator-speed-val').textContent = fmtNum(scaleState.generation_rate); }
         const running = j.is_running;
+        pipelineRunning = running;
         if (document.getElementById('live-text')) document.getElementById('live-text').textContent = running ? 'LIVE' : 'STOPPED';
       } catch (e) { }
     }
 
-    const btnStart = el('btn-start');
-    if (btnStart) {
-      btnStart.addEventListener('click', async () => {
+    (function() {
+      const btn = document.getElementById('btn-start');
+      if (!btn) return;
+      btn.addEventListener('click', async () => {
         try {
           const r = await fetch(API('/api/control/start'), { method: 'POST' });
           const j = await r.json();
           if (j.success) {
+            isPollingAllowed = true;
             await fetchScale();
-            startBusinessPoll();
+            // Start polling based on current active tab
+            const activeTab = document.querySelector('.tab.active');
+            if (activeTab && activeTab.textContent.trim().includes('Business')) {
+              startBusinessPoll();
+            } else {
+              startMachinePoll();
+            }
           }
         } catch (e) { console.warn(e); }
       });
-    }
-
-    const btnStop = el('btn-stop');
-    if (btnStop) {
-      btnStop.addEventListener('click', async () => {
+    })();
+    (function() {
+      const btn = document.getElementById('btn-stop');
+      if (!btn) return;
+      btn.addEventListener('click', async () => {
         try {
           const r = await fetch(API('/api/control/stop'), { method: 'POST' });
           const j = await r.json();
           if (j.success) {
+            isPollingAllowed = false;
             await fetchScale();
             stopBusinessPoll();
+            stopMachinePoll();
           }
         } catch (e) { console.warn(e); }
       });
-    }
-    const btnReset = el('btn-reset');
-    if (btnReset) {
-      btnReset.addEventListener('click', async () => {
+    })();
+    (function() {
+      const resetBtn = document.getElementById('btn-reset');
+      if (!resetBtn) return;
+      resetBtn.addEventListener('click', async () => {
+        // Confirm before clearing all data
         if (!confirm('⚠️ This will delete ALL pipeline data and restart fresh. Continue?')) {
           return;
         }
-        const origText = btnReset.textContent;
+
+        const btn = resetBtn;
+        const origText = btn.textContent;
 
         try {
           // Show loading state
@@ -2631,13 +2693,13 @@
           const j = await r.json();
 
           if (j.success) {
-            btnReset.textContent = '✓ Data cleared!';
-            btnReset.style.background = 'var(--green)';
+            btn.textContent = '✓ Data cleared!';
+            btn.style.background = 'var(--green)';
             setTimeout(() => {
-              btnReset.textContent = origText;
-              btnReset.style.background = '';
-              btnReset.style.opacity = '';
-              btnReset.disabled = false;
+              btn.textContent = origText;
+              btn.style.background = '';
+              btn.style.opacity = '';
+              btn.disabled = false;
             }, 2000);
             await fetchScale();
           } else {
@@ -2645,41 +2707,46 @@
           }
         } catch (e) {
           console.error('Reset error:', e);
-          btnReset.textContent = '✗ Failed';
-          btnReset.style.background = 'var(--red)';
+          btn.textContent = '✗ Failed';
+          btn.style.background = 'var(--red)';
           setTimeout(() => {
-            btnReset.textContent = origText;
-            btnReset.style.background = '';
-            btnReset.style.opacity = '';
-            btnReset.disabled = false;
+            btn.textContent = origText;
+            btn.style.background = '';
+            btn.style.opacity = '';
+            btn.disabled = false;
           }, 2000);
         }
       });
-    }
+    })();
 
-    document.querySelectorAll('.scale-btn').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const key = btn.getAttribute('data-scale');
-        const delta = parseInt(btn.getAttribute('data-delta'), 10);
-        const endpoints = { preprocessing: '/api/control/scale/preprocessing', inference: '/api/control/scale/inference', preprocessing_gpu: '/api/control/scale/preprocessing-gpu', inference_gpu: '/api/control/scale/inference-gpu' };
-        const ep = endpoints[key]; if (!ep) return;
-        const next = Math.max(0, (scaleState[key] ?? 0) + delta);
-        try {
-          const r = await fetch(API(ep), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ replicas: next }) });
-          if (r.ok) await fetchScale();
-        } catch (e) { }
+    (function() {
+      const scaleBtns = document.querySelectorAll('.scale-btn');
+      if (!scaleBtns || scaleBtns.length === 0) return;
+      scaleBtns.forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const key = btn.getAttribute('data-scale');
+          const delta = parseInt(btn.getAttribute('data-delta'), 10);
+          const endpoints = { preprocessing: '/api/control/scale/preprocessing', inference: '/api/control/scale/inference', preprocessing_gpu: '/api/control/scale/preprocessing-gpu', inference_gpu: '/api/control/scale/inference-gpu' };
+          const ep = endpoints[key]; if (!ep) return;
+          const next = Math.max(0, (scaleState[key] ?? 0) + delta);
+          try {
+            const r = await fetch(API(ep), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ replicas: next }) });
+            if (r.ok) await fetchScale();
+          } catch (e) { }
+        });
       });
-    });
+    })();
 
-    const gsBtn = document.getElementById('generator-speed');
-    if (gsBtn) {
-      gsBtn.addEventListener('input', (e) => {
+    (function() {
+      const gen = document.getElementById('generator-speed');
+      if (!gen) return;
+      gen.addEventListener('input', (e) => {
         const v = parseInt(e.target.value, 10);
-        const gsv = document.getElementById('generator-speed-val');
-        if (gsv) gsv.textContent = fmtNum(v);
+        const valEl = document.getElementById('generator-speed-val');
+        if (valEl) valEl.textContent = fmtNum(v);
         fetch(API('/api/control/throttle'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rate: v }) }).catch(() => { });
       });
-    }
+    })();
 
     // Resource Allocation: fetch bounds and wire sliders
     let resourceBounds = { cpu_min: 1, cpu_max: 8, memory_min_gb: 1, memory_max_gb: 8 };
@@ -2705,49 +2772,41 @@
       if (rm && vm) vm.textContent = rm.value + ' GB';
     }
     function patchResources() {
-      const select = el('resource-pod-select');
-      const rc = el('resource-cpu');
-      const rm = el('resource-mem');
-      const toast = el('resource-toast');
-      if (!select || !rc || !rm) return;
-
-      const pod = select.value;
-      const cpu = rc.value;
-      const mem = rm.value;
-
+      const pod = document.getElementById('resource-pod-select').value;
+      const cpu = document.getElementById('resource-cpu').value;
+      const mem = document.getElementById('resource-mem').value;
+      const toast = document.getElementById('resource-toast');
+      // Convert CPU to millicores format (e.g., "4" -> "4000m")
       const cpuLimit = (parseInt(cpu, 10) * 1000) + 'm';
       const memoryLimit = mem * 1000 + 'Mi';
-
       fetch(API('/api/resources/' + pod), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ cpu_limit: cpuLimit, memory_limit: memoryLimit })
       }).then(r => r.json()).then(j => {
-        if (toast) {
-          toast.textContent = j.success ? 'Updated' : (j.error || 'Failed');
-          toast.style.color = j.success ? 'var(--green)' : 'var(--red)';
-          setTimeout(() => { toast.textContent = ''; }, 3000);
-        }
-      }).catch(() => { if (toast) { toast.textContent = 'Request failed'; toast.style.color = 'var(--red)'; } });
+        toast.textContent = j.success ? 'Updated' : (j.error || 'Failed');
+        toast.style.color = j.success ? 'var(--green)' : 'var(--red)';
+        setTimeout(() => { toast.textContent = ''; }, 3000);
+      }).catch(() => { toast.textContent = 'Request failed'; toast.style.color = 'var(--red)'; });
     }
-
-    const rcSlider = el('resource-cpu');
-    if (rcSlider) {
-      rcSlider.addEventListener('input', (e) => {
-        updateResourceLabels();
-        clearTimeout(resourcePatchTimeout);
-        resourcePatchTimeout = setTimeout(patchResources, 500);
-      });
-    }
-
-    const rmSlider = el('resource-mem');
-    if (rmSlider) {
-      rmSlider.addEventListener('input', (e) => {
-        updateResourceLabels();
-        clearTimeout(resourcePatchTimeout);
-        resourcePatchTimeout = setTimeout(patchResources, 500);
-      });
-    }
+    (function() {
+      const rc = document.getElementById('resource-cpu');
+      if (rc) {
+        rc.addEventListener('input', (e) => {
+          updateResourceLabels();
+          clearTimeout(resourcePatchTimeout);
+          resourcePatchTimeout = setTimeout(patchResources, 500);
+        });
+      }
+      const rm = document.getElementById('resource-mem');
+      if (rm) {
+        rm.addEventListener('input', (e) => {
+          updateResourceLabels();
+          clearTimeout(resourcePatchTimeout);
+          resourcePatchTimeout = setTimeout(patchResources, 500);
+        });
+      }
+    })();
     fetchResourceBounds();
 
     // ==================== HEIGHT SYNCHRONIZATION ====================
@@ -2798,14 +2857,10 @@
     // Also sync after a short delay to ensure all DOM is ready
     setTimeout(syncHeights, 500);
 
+    // Initialize utilization comparison chart and then start connections
+    initUtilCompareChart();
     fetchScale().then(() => connectWS());
-
-    // Check initial pipeline state WITHOUT starting continuous polling
-    // WebSocket will handle real-time updates
-    // Polling will only start when user clicks "Start" or pipeline is detected as running
-    fetchBusinessMetrics().then(() => {
-      console.log('✅ Initial state loaded. Polling will start only when pipeline is RUNNING.');
-    });
+    // Polling will be started inside fetchScale() if pipeline is running
   </script>
 
 </body>

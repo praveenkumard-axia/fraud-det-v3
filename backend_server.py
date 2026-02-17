@@ -1662,8 +1662,15 @@ async def websocket_dashboard(websocket: WebSocket):
                 data["is_running"] = state.is_running
                 data["elapsed_sec"] = (time.time() - state.start_time) if state.start_time else 0
                 await websocket.send_json(data)
+            except WebSocketDisconnect:
+                print("Dashboard WebSocket client disconnected (during send)")
+                break
             except Exception as e:
+                # If the send failed because the connection was already closed, stop the loop.
+                msg = str(e).lower()
                 print(f"Dashboard WS read/send error: {e}")
+                if "cannot call" in msg and "send" in msg and "close" in msg:
+                    break
             await asyncio.sleep(1.0)
     except WebSocketDisconnect:
         print("Dashboard WebSocket client disconnected")
