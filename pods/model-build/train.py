@@ -135,6 +135,39 @@ class ModelTrainer:
         
         # NEW: Queue service for business metrics
         self.queue_service = get_queue_service()
+        
+        # Load existing model if available
+        self.load_previous_model()
+
+    def load_previous_model(self):
+        """Try to load the most recent existing model from output path"""
+        try:
+            model_name = "fraud_xgboost"
+            model_dir = self.output_path / model_name
+            if not model_dir.exists():
+                return
+                
+            # Find latest version directory
+            versions = sorted([int(d.name) for d in model_dir.iterdir() if d.is_dir() and d.name.isdigit()])
+            if not versions:
+                return
+                
+            latest_version = versions[-1]
+            model_file = model_dir / str(latest_version) / "xgboost.json"
+            
+            if model_file.exists():
+                import xgboost as xgb
+                model = xgb.Booster()
+                model.load_model(str(model_file))
+                self.current_model = model
+                self.model_version = latest_version
+                self.last_train_time = time.time()
+                log.info(f"✓ Loaded existing model v{latest_version} from disk")
+                
+                # Update global metrics as we have a model now
+                self.queue_service.set_metric("model_version_loaded", latest_version)
+        except Exception as e:
+            log.warning(f"Could not load existing model: {e}")
 
     def check_system_priority(self) -> str:
         """Check system priority from backend API"""
@@ -282,18 +315,42 @@ class ModelTrainer:
         return model
 
     def evaluate(self, model, X_test, y_test):
-        """Evaluate model."""
+        """Evaluate model and persist REAL performance metrics"""
+        log.info(f"Evaluating model on {len(y_test)} test samples...")
+        
+        # Log class distribution in test set
+        test_fraud_count = int(y_test.sum())
+        test_legit_count = len(y_test) - test_fraud_count
+        log.info(f"Test Set Distribution: Fraud={test_fraud_count}, Legit={test_legit_count}")
+        
+        # XGBoost prediction (Booster requires DMatrix)
+        import xgboost as xgb
         dtest = xgb.DMatrix(X_test)
         preds = model.predict(dtest)
         pred_labels = (preds > 0.5).astype(int)
         
-        if self.gpu_mode:
-            # Convert to numpy for reporting if needed, or keep cupy
-            # Simplified for verify script
-            pass
-        else:
-            accuracy = (pred_labels == y_test).mean()
-            log.info(f"Accuracy: {accuracy:.4f}")
+        # Correctly calculate TP, FP, FN, TN
+        tp = int(((pred_labels == 1) & (y_test == 1)).sum())
+        fp = int(((pred_labels == 1) & (y_test == 0)).sum())
+        fn = int(((pred_labels == 0) & (y_test == 1)).sum())
+        tn = int(((pred_labels == 0) & (y_test == 0)).sum())
+        
+        log.info(f"Confusion Matrix: TP={tp}, FP={fp}, FN={fn}, TN={tn}")
+        
+        total = len(y_test)
+        accuracy = (tp + tn) / total if total > 0 else 0
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
+        fpr = fp / (fp + tn) if (fp + tn) > 0 else 0
+        
+        log.info(f"REAL Metrics -> Acc: {accuracy:.4f}, Prec: {precision:.4f}, Recall: {recall:.4f}, FPR: {fpr:.4f}")
+        
+        # Persist to global metrics store
+        self.queue_service.set_metric("model_accuracy", float(accuracy))
+        self.queue_service.set_metric("model_precision", float(precision))
+        self.queue_service.set_metric("model_recall", float(recall))
+        self.queue_service.set_metric("model_fpr", float(fpr))
+        self.queue_service.set_metric("model_samples_evaluated", int(total))
 
     def save_model(self, model, feature_names, version: Optional[int] = None):
         """Save model with versioning and generate Triton config."""
@@ -399,20 +456,50 @@ parameters [
         while not STOP_FLAG:
             try:
                 # Check if we should train now
-                if not self.should_train_now():
-                    time.sleep(30)  # Check every 30 seconds
-                    continue
+                # User preference: Train once if not exists.
+                # In continuous mode, we normally retrain, but we'll prioritize current model
+                has_model = self.current_model is not None
                 
-                # Get recent feature files
+                # Get recent feature files for training OR evaluation
                 feature_files = self.get_recent_feature_files(max_files=50)
                 
                 if not feature_files:
-                    log.info("No feature files available for training")
-                    time.sleep(60)
+                    if not has_model:
+                        log.info("No feature files available and no model loaded. Waiting...")
+                    time.sleep(30)
                     continue
+
+                # Should we train or just evaluate?
+                # We train if:
+                # 1. We don't have a model yet
+                # 2. OR (it's been a long time AND we aren't in 'once-only' mode - though user implies once only)
+                # For now, let's train if NONE, otherwise just evaluate to update metrics.
+                should_train = not has_model
                 
-                # Load and combine recent data
-                log.info(f"Loading {len(feature_files)} recent feature files...")
+                if not should_train:
+                    # Just evaluate the current model on the latest features to keep metrics fresh
+                    try:
+                        log.info("Evaluating existing model on new data to update metrics...")
+                        latest_file = feature_files[0]
+                        df = pl.read_parquet(latest_file)
+                        if len(df) > 100:
+                            available_feats = [c for c in FEATURE_COLUMNS if c in df.columns]
+                            df = df.fill_null(0)
+                            X_eval = np.ascontiguousarray(df[available_feats].to_pandas().values, dtype=np.float32)
+                            y_eval = np.ascontiguousarray(df["is_fraud"].to_pandas().values, dtype=np.float32)
+                            self.evaluate(self.current_model, X_eval, y_eval)
+                            log.info("✓ Metrics updated from existing model.")
+                        
+                        # Sleep longer if we are just evaluating
+                        time.sleep(self.training_interval)
+                        continue
+                    except Exception as e:
+                        log.warning(f"Failed to update metrics from existing model: {e}")
+                        time.sleep(10)
+                        continue
+
+                # Load and combine recent data for training
+                log.info(f"Loading {len(feature_files)} recent feature files for INITIAL training...")
                 dfs = []
                 total_samples = 0
                 
@@ -430,7 +517,7 @@ parameters [
                 
                 if total_samples < self.min_samples_for_training:
                     log.info(f"Not enough samples ({total_samples:,} < {self.min_samples_for_training:,})")
-                    time.sleep(60)
+                    time.sleep(30)
                     continue
                 
                 # Combine dataframes
@@ -455,17 +542,12 @@ parameters [
                 X_test = np.ascontiguousarray(pdf_test[available_feats].values, dtype=np.float32)
                 y_test = np.ascontiguousarray(pdf_test["is_fraud"].values, dtype=np.float32)
                 
-                # Train model
+                # Train
                 start_time = time.time()
                 log.info("Training model...")
                 
-                if self.current_model is not None:
-                    # Incremental training (use previous model as starting point)
-                    log.info("Performing incremental training from previous model")
-                    model = self.train(X_train, y_train, X_test, y_test)
-                else:
-                    # Fresh training
-                    model = self.train(X_train, y_train, X_test, y_test)
+                # Fresh training
+                model = self.train(X_train, y_train, X_test, y_test)
                 
                 # Evaluate
                 self.evaluate(model, X_test, y_test)

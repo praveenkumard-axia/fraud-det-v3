@@ -174,9 +174,9 @@ def run_single_inference(triton_client, model_name):
         log("No Triton client available")
         return
     
-    # Generate dummy data matching the feature size (15 features)
+    # Generate dummy data matching the feature size (20 features)
     batch_size = 1
-    input_data = np.random.randn(batch_size, 15).astype(np.float32)
+    input_data = np.random.randn(batch_size, 20).astype(np.float32)
     
     inputs = [
         httpclient.InferInput("input__0", input_data.shape, "FP32")
@@ -216,6 +216,14 @@ def run_continuous_inference(triton_client, cpu_model, model_name, batch_size, q
     
     while not STOP_FLAG:
         try:
+            # CPU Mode: must have a model before consuming anything
+            if not triton_client and cpu_model is None:
+                cpu_model = load_xgboost_model_cpu()
+                if cpu_model is None:
+                    log("⌛ Waiting for model to be trained... (Inference pod paused)")
+                    time.sleep(10)
+                    continue
+
             # Consume batch from features queue
             messages = queue_service.consume_batch(
                 QueueTopics.FEATURES_READY,
@@ -230,11 +238,15 @@ def run_continuous_inference(triton_client, cpu_model, model_name, batch_size, q
             log(f"Inferring batch of {len(messages):,} records...")
             
             # Prepare input data
-            # Extract features (assuming 15 features)
-            feature_cols = ['amt', 'lat', 'long', 'city_pop', 'unix_time', 
-                          'merch_lat', 'merch_long', 'merch_zipcode', 'zip',
-                          'amt_log', 'hour_of_day', 'day_of_week', 
-                          'is_weekend', 'is_night', 'distance_km']
+            # Extract features (20 features total, matching model build)
+            feature_cols = [
+                'amt', 'lat', 'long', 'city_pop', 'unix_time', 
+                'merch_lat', 'merch_long', 'merch_zipcode', 'zip',
+                'amt_log', 'hour_of_day', 'day_of_week', 
+                'is_weekend', 'is_night', 'distance_km',
+                'category_encoded', 'state_encoded', 'gender_encoded', 
+                'city_pop_log', 'zip_region'
+            ]
             
             input_data = []
             for msg in messages:
@@ -247,19 +259,9 @@ def run_continuous_inference(triton_client, cpu_model, model_name, batch_size, q
             if triton_client:
                 # Use Triton (GPU/optimized)
                 results = run_triton_inference(triton_client, model_name, input_array)
-            elif cpu_model:
+            else:
                 # Use CPU XGBoost (real predictions)
                 results = run_cpu_inference(cpu_model, input_array)
-            else:
-                # Try to load model now
-                cpu_model = load_xgboost_model_cpu()
-                if cpu_model:
-                    results = run_cpu_inference(cpu_model, input_array)
-                else:
-                    # Fallback to simulation (only if no model available)
-                    # Use simulation temporarily but log it clearly
-                    log("⚠ Simulation mode (waiting for model to be trained...)")
-                    results = np.random.rand(len(messages)).astype(np.float32)
             
             # Prepare output messages and track metrics
             output_messages = []

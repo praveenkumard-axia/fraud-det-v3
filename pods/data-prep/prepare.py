@@ -226,9 +226,19 @@ class DataPrepService:
                  ((pl.col("merch_long") - pl.col("long")) * 85.0).pow(2)).sqrt().alias("distance_km")
             ])
             
-        # 4. Drop strings
-        # Update schema columns after potential additions (though here we just added aliases, original columns persist)
-        # Actually lazy frame 'q' schema changes with with_columns.
+        # 4. Encoding
+        # Simple hashing for categorical strings to provide numerical features for XGBoost
+        # We use hash() % 1000 for category/state to keep values in a reasonable range
+        q = q.with_columns([
+            (pl.col("category").hash() % 1000).cast(pl.Int32).alias("category_encoded"),
+            (pl.col("state").hash() % 100).cast(pl.Int32).alias("state_encoded"),
+            (pl.col("gender") == "M").cast(pl.Int8).alias("gender_encoded"),
+            pl.col("city_pop").log1p().alias("city_pop_log"),
+            (pl.col("zip") // 10000).cast(pl.Int32).alias("zip_region")
+        ])
+
+        # 5. Drop strings
+        # Update schema columns after encoding
         current_cols = q.collect_schema().names()
         cols_to_keep = [c for c in current_cols if c not in STRING_COLUMNS_TO_DROP]
         q = q.select(cols_to_keep)

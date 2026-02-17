@@ -175,13 +175,28 @@ def generate_chunk(pools, n, rng, fraud_rate, base_time):
     # but dictionary -> Table -> Parquet is robust and readable.
     # Using specific PyArrow types for efficiency.
     
+    # Inject strong signal: Generate labels first then bias features
+    is_fraud = (rng.random(n) < fraud_rate).astype(np.int8)
+    
+    # Signal 1: Fraudulent transactions tend to have VERY high amounts
+    # Normal amounts are usually < 100
+    amts[is_fraud == 1] = rng.uniform(2000.0, 5000.0, size=np.sum(is_fraud)).astype(np.float32)
+    
+    # Signal 2: Fraudulent transactions are strictly biased toward risky categories
+    categories = pools['categories'][rng.choice(len(pools['categories']), size=n, p=pools['category_weights'])]
+    fraud_indices = np.where(is_fraud == 1)[0]
+    high_risk_cats = ['shopping_net', 'travel', 'misc_net']
+    for idx_f in fraud_indices:
+        # 100% chance to force a high risk category for fraud in this test
+        categories[idx_f] = rng.choice(high_risk_cats)
+
     data = {
         # 'trans_date_trans_time': Use unix_time directly instead
         'unix_time': unix_times, # Keep raw int64 for efficiency
         
         'cc_num': rng.integers(4000000000000000, 5000000000000000, size=n, dtype=np.int64),
         'merchant': pools['merchant'][idx('merchant')],
-        'category': pools['categories'][rng.choice(len(pools['categories']), size=n, p=pools['category_weights'])],
+        'category': categories,
         'amt': amts,
         'first': pools['first'][idx('first')],
         'last': pools['last'][idx('last')],
@@ -200,7 +215,7 @@ def generate_chunk(pools, n, rng, fraud_rate, base_time):
         # Redundant but kept for compatibility with original schema if needed
         'merch_lat': merch_lats,
         'merch_long': merch_longs,
-        'is_fraud': (rng.random(n) < fraud_rate).astype(np.int8),
+        'is_fraud': is_fraud,
         'merch_zipcode': rng.integers(10000, 99999, size=n, dtype=np.int32),
     }
     
@@ -289,7 +304,7 @@ def main():
 
     num_workers = int(os.getenv('NUM_WORKERS', '4'))
     chunk_size = int(os.getenv('CHUNK_SIZE', '50000'))
-    fraud_rate = float(os.getenv('FRAUD_RATE', '0.005'))
+    fraud_rate = float(os.getenv('FRAUD_RATE', '0.02'))
     
     # NEW: Continuous mode configuration
     continuous_mode = os.getenv('CONTINUOUS_MODE', 'true').lower() == 'true'

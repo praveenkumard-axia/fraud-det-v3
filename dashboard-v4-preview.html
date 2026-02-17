@@ -1806,6 +1806,9 @@
       return num.toString();
     }
 
+    // Global helper for element selection
+    const el = (id) => document.getElementById(id);
+
     // Helper function to format numbers (used in existing code)
     function fmtNum(n) {
       return formatNumberSmooth(n);
@@ -1820,17 +1823,18 @@
       if (tab === 'business') {
         document.querySelectorAll('.tab')[0].classList.add('active');
         document.getElementById('tab-business').classList.add('active');
-        if (isPollingAllowed) startBusinessPoll();
-        stopMachinePoll();
+        // Both remain active if pipeline is running to keep sidebar updated
       } else {
         document.querySelectorAll('.tab')[1].classList.add('active');
         document.getElementById('tab-tech').classList.add('active');
-        stopBusinessPoll();
-        if (isPollingAllowed) startMachinePoll();
       }
 
       // Sync heights after switching tabs to account for layout changes
-      setTimeout(syncHeights, 100);
+      setTimeout(() => {
+        syncHeights();
+        if (throughputTrendChart) throughputTrendChart.resize();
+        if (utilCompareChart) utilCompareChart.resize();
+      }, 100);
     }
 
     // ==================== MODEL PERFORMANCE SYNC ====================
@@ -2049,7 +2053,6 @@
 
     function updateBusinessMetrics(b) {
       if (!b) return;
-      const el = (id) => document.getElementById(id);
       if (el('kpi-fraud-exposure')) el('kpi-fraud-exposure').textContent = fmtUsd(b.fraud_exposure_identified);
       if (el('kpi-fraud-rate')) el('kpi-fraud-rate').textContent = (Number(b.fraud_rate || 0) * 100).toFixed(2) + '%';
       if (el('kpi-alerts')) el('kpi-alerts').textContent = fmtNum(b.alerts_per_million || 0);
@@ -2172,6 +2175,7 @@
           el('velocity-badge').style.color = 'var(--green)';
         }
       }
+      syncProgressBars();
     }
 
     let businessPollTimer = null;
@@ -2205,9 +2209,6 @@
       try {
         const r = await fetch(API('/api/machine/metrics'));
         const j = await r.json();
-        // Debug: log throughput payload to browser console to help track "stuck" values
-        try { console.debug("fetchMachineMetrics() -> throughput:", j.throughput, "model:", j.Model); } catch (e) { /* ignore */ }
-        const el = (id) => document.getElementById(id);
         const t = j.throughput || {};
         const fb = j.FlashBlade || {};
         const model = j.Model || {};
@@ -2223,23 +2224,30 @@
 
         // Use direct metrics if available, otherwise estimate from Model data
         // CPU handles ~30% of workload, GPU handles ~70% (typical hybrid split)
-        let cpuTPS = t.cpu ?? 0;
-        let gpuTPS = t.gpu ?? 0;
+        let cpuTPS = Number(t.cpu) || 0;
+        let gpuTPS = Number(t.gpu) || 0;
 
+        // ONLY fallback to estimation if backend returns literal zero for BOTH
         if (cpuTPS === 0 && gpuTPS === 0 && estimatedTotalTPS > 0) {
           cpuTPS = Math.round(estimatedTotalTPS * 0.3);
           gpuTPS = Math.round(estimatedTotalTPS * 0.7);
         }
 
-        // Update Machine Metrics panel
-        if (el('mm-cpu')) el('mm-cpu').textContent = fmtNum(cpuTPS);
-        if (el('mm-gpu')) el('mm-gpu').textContent = fmtNum(gpuTPS);
-        if (el('mm-fb')) el('mm-fb').textContent = (t.fb ?? 0).toFixed(1);
-        if (el('mm-fb-read')) el('mm-fb-read').textContent = fb.read ?? '0MB/s';
-        if (el('mm-fb-write')) el('mm-fb-write').textContent = fb.write ?? '0MB/s';
-        if (el('mm-model-precision')) el('mm-model-precision').textContent = ml.precision != null ? (ml.precision * 100).toFixed(1) + '%' : '—';
-        if (el('mm-model-recall')) el('mm-model-recall').textContent = ml.recall != null ? (ml.recall * 100).toFixed(1) + '%' : '—';
-        if (el('mm-model-fraud')) el('mm-model-fraud').textContent = fmtUsd(model.fraud_exposure_identified ?? 0);
+        // Ensure numeric conversion and update Machine Metrics panel
+        const cpuVal = Number(t.cpu) || 0;
+        const gpuVal = Number(t.gpu) || 0;
+        const fbVal = Number(t.fb) || 0;
+        if (el('mm-cpu')) el('mm-cpu').textContent = fmtNum(cpuVal);
+        if (el('mm-gpu')) el('mm-gpu').textContent = fmtNum(gpuVal);
+        if (el('mm-fb')) el('mm-fb').textContent = fbVal.toFixed(1);
+        if (el('mm-fb-read')) el('mm-fb-read').textContent = (fb.read ?? '0MB/s');
+        if (el('mm-fb-write')) el('mm-fb-write').textContent = (fb.write ?? '0MB/s');
+        // Model metrics (from business / model data)
+        try {
+          if (el('mm-model-precision')) el('mm-model-precision').textContent = (ml.precision != null && !isNaN(Number(ml.precision))) ? (Number(ml.precision) * 100).toFixed(1) + '%' : '—';
+          if (el('mm-model-recall')) el('mm-model-recall').textContent = (ml.recall != null && !isNaN(Number(ml.recall))) ? (Number(ml.recall) * 100).toFixed(1) + '%' : '—';
+          if (el('mm-model-fraud')) el('mm-model-fraud').textContent = fmtUsd(Number(model.fraud_exposure_identified ?? 0));
+        } catch (e) { /* ignore model display errors */ }
 
         // Synchronize metric values with progress bars
         syncProgressBars();
@@ -2633,7 +2641,7 @@
       } catch (e) { }
     }
 
-    (function() {
+    (function () {
       const btn = document.getElementById('btn-start');
       if (!btn) return;
       btn.addEventListener('click', async () => {
@@ -2643,18 +2651,14 @@
           if (j.success) {
             isPollingAllowed = true;
             await fetchScale();
-            // Start polling based on current active tab
-            const activeTab = document.querySelector('.tab.active');
-            if (activeTab && activeTab.textContent.trim().includes('Business')) {
-              startBusinessPoll();
-            } else {
-              startMachinePoll();
-            }
+            // Start BOTH polls so both tabs and global sidebars stay updated
+            startBusinessPoll();
+            startMachinePoll();
           }
         } catch (e) { console.warn(e); }
       });
     })();
-    (function() {
+    (function () {
       const btn = document.getElementById('btn-stop');
       if (!btn) return;
       btn.addEventListener('click', async () => {
@@ -2670,7 +2674,7 @@
         } catch (e) { console.warn(e); }
       });
     })();
-    (function() {
+    (function () {
       const resetBtn = document.getElementById('btn-reset');
       if (!resetBtn) return;
       resetBtn.addEventListener('click', async () => {
@@ -2719,7 +2723,7 @@
       });
     })();
 
-    (function() {
+    (function () {
       const scaleBtns = document.querySelectorAll('.scale-btn');
       if (!scaleBtns || scaleBtns.length === 0) return;
       scaleBtns.forEach(btn => {
@@ -2737,7 +2741,7 @@
       });
     })();
 
-    (function() {
+    (function () {
       const gen = document.getElementById('generator-speed');
       if (!gen) return;
       gen.addEventListener('input', (e) => {
@@ -2789,7 +2793,7 @@
         setTimeout(() => { toast.textContent = ''; }, 3000);
       }).catch(() => { toast.textContent = 'Request failed'; toast.style.color = 'var(--red)'; });
     }
-    (function() {
+    (function () {
       const rc = document.getElementById('resource-cpu');
       if (rc) {
         rc.addEventListener('input', (e) => {
