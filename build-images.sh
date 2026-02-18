@@ -8,33 +8,26 @@ echo "      Fraud Detection Pipeline - Image Builder"
 echo "=========================================================="
 
 # Tag and Push to Docker Hub
-USER="pduraiswamy16722"
+DOCKER_USER="pduraiswamy16722"
 
-# 1. Backend
-echo "Building and Pushing Backend..."
-docker build -t $USER/fraud-det-v3-dockerfile.backend:latest -f Dockerfile.backend .
-docker push $USER/fraud-det-v3-dockerfile.backend:latest
 
-# 2. Data Gather
-echo "Building and Pushing Data Gather..."
-docker build -t $USER/fraud-det-v3-data-gather:latest -f pods/data-gather/Dockerfile .
-docker push $USER/fraud-det-v3-data-gather:latest
+docker build -t $DOCKER_USER/fraud-det-v3-dockerfile.backend:latest -f Dockerfile.backend .
+docker push $DOCKER_USER/fraud-det-v3-dockerfile.backend:latest
 
-# 3. Preprocessing (CPU/GPU unified in data-prep)
-echo "Building and Pushing Data Prep..."
-docker build -t $USER/fraud-det-v3-data-prep:latest -f pods/data-prep/Dockerfile .
-docker push $USER/fraud-det-v3-data-prep:latest
+docker build -t $DOCKER_USER/fraud-det-v3-data-gather:latest -f pods/data-gather/Dockerfile .
+docker push $DOCKER_USER/fraud-det-v3-data-gather:latest
 
-# 4. Model Build
-echo "Building and Pushing Model Build..."
-docker build -t $USER/fraud-det-v3-model-build:latest -f pods/model-build/Dockerfile .
-docker push $USER/fraud-det-v3-model-build:latest
+docker build -t $DOCKER_USER/fraud-det-v3-data-prep:cpu -f pods/data-prep/Dockerfile.cpu .
+docker push $DOCKER_USER/fraud-det-v3-data-prep:cpu
 
-# 5. Inference
-echo "Building and Pushing Inference..."
-docker build -t $USER/fraud-det-v3-inference:latest -f pods/inference/Dockerfile .
-docker push $USER/fraud-det-v3-inference:latest
+docker build -t $DOCKER_USER/fraud-det-v3-inference:cpu -f pods/inference/Dockerfile.cpu .
+docker push $DOCKER_USER/fraud-det-v3-inference:cpu
 
-echo "=========================================================="
-echo "               Build & Push Complete!"
-echo "=========================================================="
+docker build -t $DOCKER_USER/fraud-det-v3-data-prep:gpu -f pods/data-prep/Dockerfile.gpu .
+docker push $DOCKER_USER/fraud-det-v3-data-prep:gpu
+
+docker build -t $DOCKER_USER/fraud-det-v3-model-build:gpu -f pods/model-build/Dockerfile .
+docker push $DOCKER_USER/fraud-det-v3-model-build:gpu
+
+docker build -t $DOCKER_USER/fraud-det-v3-inference:latest -f pods/inference/Dockerfile .
+docker push $DOCKER_USER/fraud-det-v3-inference:latest
