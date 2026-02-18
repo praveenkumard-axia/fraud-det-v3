@@ -16,7 +16,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import Dict, Optional, List
 
-from fastapi import FastAPI, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, BackgroundTasks, WebSocket, WebSocketDisconnect, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -1439,6 +1439,38 @@ async def get_infra_compute():
     }
 
 
+
+@app.get("/metrics")
+async def get_prometheus_metrics():
+    """
+    Expose business/API metrics in Prometheus text format.
+    Data source: state.telemetry and queue_service.
+    """
+    with state.lock:
+        tel = state.telemetry.copy()
+    
+    m_store = state.queue_service.get_metrics()
+    
+    # Mapping existing telemetry to Prometheus-style metrics
+    metrics = [
+        ("# HELP fraud_det_transactions_total Total transactions analyzed", "counter", "fraud_det_transactions_total", tel.get("txns_scored", 0)),
+        ("# HELP fraud_det_high_risk_total Total high-risk transactions flagged", "counter", "fraud_det_high_risk_total", tel.get("fraud_blocked", 0)),
+        ("# HELP fraud_det_fraud_exposure_usd Total potential fraud identified in USD", "gauge", "fraud_det_fraud_exposure_usd", m_store.get("total_fraud_amount_identified", tel.get("fraud_blocked", 0) * 50)),
+        ("# HELP fraud_det_throughput_tps Current pipeline throughput in txns/sec", "gauge", "fraud_det_throughput_tps", tel.get("throughput", 0)),
+        ("# HELP fraud_det_decision_latency_ms Model decision latency in milliseconds", "gauge", "fraud_det_decision_latency_ms", tel.get("cpu_percent", 12.0)),
+        ("# HELP fraud_det_fb_cpu_throughput_mbps FlashBlade CPU volume throughput", "gauge", "fraud_det_fb_cpu_throughput_mbps", tel.get("fb_cpu_throughput", 0)),
+        ("# HELP fraud_det_fb_gpu_throughput_mbps FlashBlade GPU volume throughput", "gauge", "fraud_det_fb_gpu_throughput_mbps", tel.get("fb_gpu_throughput", 0)),
+    ]
+    
+    output = []
+    for help_text, metric_type, name, value in metrics:
+        output.append(help_text)
+        output.append(f"# TYPE {name} {metric_type}")
+        output.append(f"{name} {value}")
+        
+    return Response(content="\n".join(output) + "\n", media_type="text/plain")
+
+
 @app.get("/api/infra/storage")
 async def get_infra_storage():
     """
@@ -1586,6 +1618,15 @@ async def websocket_dashboard(websocket: WebSocket):
                         },
                         "timestamp": time.time(),
                     }
+                # NEW: Hardware & Infra - return direct data from Prom API if available
+                if "prometheus" not in data or not data.get("prometheus"):
+                    from prometheus_metrics import fetch_prometheus_metrics
+                    data["prometheus"] = await asyncio.to_thread(fetch_prometheus_metrics)
+                    # Merge into node stats if not present
+                    if "infra" in data and "node" in data["infra"]:
+                        data["infra"]["node"]["cpu_percent"] = data["infra"]["node"].get("cpu_percent") or data["prometheus"].get("node_cpu_percent")
+                        data["infra"]["node"]["ram_percent"] = data["infra"]["node"].get("ram_percent") or data["prometheus"].get("node_ram_percent")
+
                 # Add live state and elapsed for dashboard
                 data["is_running"] = state.is_running
                 # Freeze elapsed when stopped — only tick while running

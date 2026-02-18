@@ -49,6 +49,7 @@ def _prometheus_query(url: str, query: str, timeout: float = 2.0) -> Optional[fl
         return None
 
 
+
 def fetch_prometheus_metrics() -> Dict[str, Any]:
     """
     Fetch storage throughput, utilization, latency from Prometheus.
@@ -87,6 +88,7 @@ def fetch_prometheus_metrics() -> Dict[str, Any]:
         "((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes) * 100"
     )
 
+    # 1. Primary Node Stats
     read_mbps = _prometheus_query(url, read_q)
     write_mbps = _prometheus_query(url, write_q)
     util_pct = _prometheus_query(url, util_q) if util_q else None
@@ -94,12 +96,24 @@ def fetch_prometheus_metrics() -> Dict[str, Any]:
     node_cpu_pct = _prometheus_query(url, node_cpu_q)
     node_mem_pct = _prometheus_query(url, node_mem_q)
 
-    # FlashBlade-specific if provided and PURE_SERVER=true; else use node_disk (local disk) metrics
+    # 2. FlashBlade-specific (if enabled)
     pure_server = os.getenv("PURE_SERVER", "false").strip().lower() in ("true", "1", "yes")
     fb_read_q = os.getenv("PROMETHEUS_FB_READ_QUERY", "").strip() if pure_server else ""
     fb_write_q = os.getenv("PROMETHEUS_FB_WRITE_QUERY", "").strip() if pure_server else ""
     fb_read = _prometheus_query(url, fb_read_q) if fb_read_q else read_mbps
     fb_write = _prometheus_query(url, fb_write_q) if fb_write_q else write_mbps
+
+    # 3. Pod-level Metrics (Hardware/Infra enrichment)
+    # CPU: nanocores -> millicores (approx)
+    pod_cpu_q = "sum(rate(container_cpu_usage_seconds_total{namespace='fraud-det-v3',container!=''}[1m])) by (pod) * 1000"
+    # RAM: bytes -> MiB
+    pod_mem_q = "sum(container_memory_working_set_bytes{namespace='fraud-det-v3',container!=''}) by (pod) / 1048576"
+    
+    # We need to manually handle 'by (pod)' queries here as _prometheus_query only returns scalar
+    # Since we don't have a complex PromQL parser here, we'll keep it simple or just return the aggregate for now
+    # But for "Hardware & Infra", let's at least get the totals from Prometheus
+    total_pod_cpu = _prometheus_query(url, f"sum({pod_cpu_q})")
+    total_pod_mem = _prometheus_query(url, f"sum({pod_mem_q})")
 
     out = {
         "storage_read_mbps": round(read_mbps, 2) if read_mbps is not None else None,
@@ -110,5 +124,7 @@ def fetch_prometheus_metrics() -> Dict[str, Any]:
         "fb_write_mbps": round(fb_write, 2) if fb_write is not None else None,
         "node_cpu_percent": round(node_cpu_pct, 2) if node_cpu_pct is not None else None,
         "node_ram_percent": round(node_mem_pct, 2) if node_mem_pct is not None else None,
+        "total_pod_cpu_millicores": round(total_pod_cpu, 1) if total_pod_cpu is not None else None,
+        "total_pod_mem_mib": round(total_pod_mem, 1) if total_pod_mem is not None else None,
     }
     return {k: v for k, v in out.items() if v is not None}

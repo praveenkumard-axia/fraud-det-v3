@@ -149,6 +149,10 @@ def collect_metrics(
                 node_ram_pct = _cached_node_ram_pct or 0
     elif node_cpu_pct is not None:
         cpu_util_pct = node_cpu_pct
+    elif prom.get("total_pod_cpu_millicores") is not None:
+        # Use Prometheus pod totals if node percent is missing
+        total_cores_limit = 41.0
+        cpu_util_pct = (prom["total_pod_cpu_millicores"] / (total_cores_limit * 1000.0)) * 100.0
     else:
         # Fallback to sum of millicores vs total limit (approx 41 cores in manifest)
         total_cores_limit = 41.0
@@ -318,10 +322,11 @@ def collect_metrics(
             "pods": pod_top,
             "allocation": res_alloc,
             "node": {
-                "cpu_percent": node_cpu_pct,
-                "ram_percent": node_ram_pct
+                "cpu_percent": node_cpu_pct or cpu_util_pct,
+                "ram_percent": node_ram_pct or (prom.get("total_pod_mem_mib", 0) / (96 * 1024) * 100) # Approx 96GB across nodes
             }
         },
+        "prometheus": prom,
         "business": {
             "no_of_generated": generated,
             "no_of_processed": txns_scored,
