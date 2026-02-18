@@ -1735,7 +1735,86 @@ async def websocket_dashboard(websocket: WebSocket):
         print(f"Dashboard WebSocket error: {e}")
 
 
+
+# ==================== RESOURCE EFFICIENCY API ====================
+
+@app.get("/api/infra/efficiency")
+async def get_resource_efficiency():
+    """
+    Returns comparative metrics for CPU vs GPU compute efficiency 
+    and their correlation with FlashBlade I/O throughput.
+    """
+    
+    # Fetch metrics from cache first to be blazing fast
+    metrics = metrics_cache.get_all_metrics(pipeline_state.queue_service)
+    
+    if not metrics:
+        return {"status": "warming_up", "message": "Metrics collection initializing..."}
+
+    # Extract raw data points
+    cpu_data = metrics.get("cpu", [{}])[-1]
+    gpu_data = metrics.get("gpu", [{}])[-1]
+    storage = metrics.get("storage", {})
+    infra = metrics.get("infra", {})
+    
+    # 1. Compute Comparison
+    cpu_cores_used = cpu_data.get("util_millicores", 0) / 1000.0
+    gpu_util_pct = gpu_data.get("util", 0)
+    
+    # Get Pod Counts for Context
+    alloc = infra.get("allocation", {})
+    cpu_pods = alloc.get("data-gather", {}).get("replicas", 0) + alloc.get("preprocessing-cpu", {}).get("replicas", 0) + alloc.get("inference-cpu", {}).get("replicas", 0)
+    gpu_pods = alloc.get("preprocessing-gpu", {}).get("replicas", 0) + alloc.get("model-build", {}).get("replicas", 0) + alloc.get("inference-gpu", {}).get("replicas", 0)
+
+    # 2. Storage Correlation (FlashBlade Throughput)
+    # CPU Cluster -> Writes to /mnt/cpu-fb
+    fb_cpu_mbps = storage.get("cpu_mbps", 0)
+    
+    # GPU Cluster -> Reads/Writes to /mnt/gpu-fb
+    fb_gpu_mbps = storage.get("gpu_mbps", 0)
+
+    # 3. Efficiency Ratios (MB/s per Core or MB/s per GPU %)
+    # specific handling for zero division
+    cpu_efficiency = round(fb_cpu_mbps / cpu_cores_used, 2) if cpu_cores_used > 0 else 0
+    gpu_efficiency = round(fb_gpu_mbps / gpu_pods, 2) if gpu_pods > 0 else 0  # MB/s per GPU pod
+
+    response = {
+        "timestamp": time.time(),
+        "compute_comparison": {
+            "cpu_cluster": {
+                "active_pods": cpu_pods,
+                "cores_utilized": round(cpu_cores_used, 2),
+                "utilization_pct": cpu_data.get("util_pct", 0)
+            },
+            "gpu_cluster": {
+                "active_pods": gpu_pods,
+                "gpu_utilization_pct": gpu_util_pct,
+                "status": "High Load" if gpu_util_pct > 80 else "Normal"
+            }
+        },
+        "storage_efficiency": {
+            "cpu_volume": {
+                "mount_point": "/mnt/cpu-fb",
+                "throughput_mbps": fb_cpu_mbps,
+                "io_efficiency_score": "High" if fb_cpu_mbps > 50 else "Low"
+            },
+            "gpu_volume": {
+                "mount_point": "/mnt/gpu-fb",
+                "throughput_mbps": fb_gpu_mbps,
+                "io_efficiency_score": "High" if fb_gpu_mbps > 100 else "Low"
+            }
+        },
+        "correlations": {
+            "cpu_io_ratio": f"{cpu_efficiency} MB/s per Core",
+            "gpu_io_ratio": f"{gpu_efficiency} MB/s per GPU Pod"
+        }
+    }
+    
+    return response
+
+
 # ==================== Server Startup ====================
+
 
 if __name__ == "__main__":
     print("=" * 70)

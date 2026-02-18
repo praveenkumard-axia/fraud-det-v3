@@ -377,11 +377,26 @@ def write_metrics_json(
     path: Optional[Path] = None,
 ) -> None:
     path = path or METRICS_JSON_PATH
-    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.parent.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+    
     tmp_path = path.with_suffix(".tmp")
-    with open(tmp_path, "w") as f:
-        json.dump(payload, f, indent=0)
-    tmp_path.replace(path) # Atomic rename
+    try:
+        with open(tmp_path, "w") as f:
+            json.dump(payload, f, indent=0)
+        
+        # Retry logic for Windows file locking
+        max_retries = 5
+        for i in range(max_retries):
+            try:
+                tmp_path.replace(path) # Atomic rename (on POSIX) / Replace (on Windows, may fail if open)
+                break
+            except OSError:
+                if i == max_retries - 1:
+                    raise # Give up after retries
+                time.sleep(0.1)
+    except Exception as e:
+        print(f"Error writing metrics JSON: {e}")
 
 
 def run_one_poll(
