@@ -1,0 +1,67 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: one-shot-pipeline
+  namespace: fraud-det-v3
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: pipeline-orchestrator
+        image: apandit07650/fraud-det-v3-model-build:gpu
+        imagePullPolicy: IfNotPresent
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          echo "Starting Pipeline Step 1: Data Generation (1M records target)..."
+          export CONTINUOUS_MODE=false
+          export DURATION_SECONDS=60
+          export NUM_WORKERS=8
+          export CHUNK_SIZE=50000
+          python3 pods/data-gather/gather.py
+
+          echo "Starting Pipeline Step 2: Data Preprocessing (GPU Optimized)..."
+          export INPUT_PATH="/mnt/gpu-fb/raw"
+          export OUTPUT_PATH="/mnt/gpu-fb/features"
+          python3 pods/data-prep/prepare.py
+
+          echo "Starting Pipeline Step 3: Model Training (1M Sample Limit)..."
+          export TRAIN_SAMPLE_LIMIT=1000000
+          export INPUT_PATH="/mnt/gpu-fb/features"
+          export OUTPUT_PATH="/mnt/cpu-fb/models"
+          export OUTPUT_PATH_SECONDARY="/mnt/gpu-fb/models"
+          python3 pods/model-build/train.py
+          
+          echo "Pipeline Complete. Models stored in CPU and GPU volumes."
+        env:
+        - name: QUEUE_TYPE
+          value: "flashblade"
+        - name: FLASHBLADE_PATH
+          value: "/mnt/cpu-fb"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        resources:
+          requests:
+            cpu: "2"
+            memory: "16Gi"
+            nvidia.com/gpu: "1"
+          limits:
+            cpu: "6"
+            memory: "32Gi"
+            nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: cpu-fb
+          mountPath: /mnt/cpu-fb
+        - name: gpu-fb
+          mountPath: /mnt/gpu-fb
+      volumes:
+      - name: cpu-fb
+        persistentVolumeClaim:
+          claimName: fraud-det-v3-cpu-fb
+      - name: gpu-fb
+        persistentVolumeClaim:
+          claimName: fraud-det-v3-gpu-fb

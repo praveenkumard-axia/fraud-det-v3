@@ -1,6 +1,6 @@
 # Multi-Volume FlashBlade configuration: CPU + GPU
 # Requires Pure Storage FlashBlade (pure-file StorageClass)
-# Run: kubectl apply -f k8s_configs/dual-flashblade.yaml
+# Refactored for path isolation and resource cleanup.
 
 apiVersion: v1
 kind: Namespace
@@ -10,6 +10,7 @@ metadata:
     app.kubernetes.io/name: fraud-det-v3
 ---
 # PV 1: CPU Volume (Manual)
+# Dedicated path for CPU-bound data and models.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -24,7 +25,7 @@ spec:
     - ReadWriteMany
   nfs:
     server: 10.23.181.65
-    path: /financial-fraud-detection-demo
+    path: /financial-fraud-detection-demo/cpu
   storageClassName: ""
   mountOptions:
     - vers=3
@@ -33,6 +34,7 @@ spec:
     - intr
 ---
 # PV 2: GPU Volume (Manual)
+# Dedicated path for GPU-optimized features and high-throughput data.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -47,7 +49,7 @@ spec:
     - ReadWriteMany
   nfs:
     server: 10.23.181.65
-    path: /financial-fraud-detection-demo
+    path: /financial-fraud-detection-demo/gpu
   storageClassName: ""
   mountOptions:
     - vers=3
@@ -72,10 +74,6 @@ spec:
       storage: 500Gi
   storageClassName: ""
   volumeName: fraud-det-v3-cpu-fb-pv
-  selector:
-    matchLabels:
-      storage: flashblade
-      workload: cpu
 ---
 # PVC 2: GPU Volume
 apiVersion: v1
@@ -94,13 +92,9 @@ spec:
       storage: 500Gi
   storageClassName: ""
   volumeName: fraud-det-v3-gpu-fb-pv
-  selector:
-    matchLabels:
-      storage: flashblade
-      workload: gpu
 ---
 # Pod 1: Data Gather (CPU generation)
-# Writes to both volumes (Step 1)
+# Orchestrates data generation with dual-volume archiving.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -120,16 +114,10 @@ spec:
         app: "data-gather"
         tier: "generation"
     spec:
-      securityContext:
-        runAsUser: 0
-      tolerations:
-      - key: "node.kubernetes.io/disk-pressure"
-        operator: "Exists"
-        effect: "NoSchedule"
       containers:
         - name: data-gather
           image: pduraiswamy16722/fraud-det-v3-data-gather:latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           env:
             - name: FLASHBLADE_PATH
               value: "/mnt/cpu-fb"
@@ -159,8 +147,8 @@ spec:
               cpu: "2000m"
               memory: "16Gi"
             limits:
-              cpu: "8000m"
-              memory: "32Gi"
+              cpu: "4000m"
+              memory: "24Gi"
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
@@ -170,7 +158,7 @@ spec:
             claimName: fraud-det-v3-gpu-fb
 ---
 # Pod 2.1: CPU Preprocessing
-# Reads from CPU volume, writes to GPU volume (Step 2.1)
+# Isolated to CPU volume for resource efficiency.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -190,16 +178,10 @@ spec:
         app: "preprocessing-cpu"
         tier: "preprocessing"
     spec:
-      securityContext:
-        runAsUser: 0
-      tolerations:
-      - key: "node.kubernetes.io/disk-pressure"
-        operator: "Exists"
-        effect: "NoSchedule"
       containers:
         - name: preprocessing-cpu
           image: apandit07650/fraud-det-v3-data-prep:cpu
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           env:
             - name: FLASHBLADE_PATH
               value: "/mnt/cpu-fb"
@@ -210,31 +192,26 @@ spec:
             - name: INPUT_PATH
               value: "/mnt/cpu-fb/raw"
             - name: OUTPUT_PATH
-              value: "/mnt/gpu-fb/features"
+              value: "/mnt/cpu-fb/features"
             - name: PYTHONUNBUFFERED
               value: "1"
           volumeMounts:
             - name: cpu-fb
               mountPath: /mnt/cpu-fb
-            - name: gpu-fb
-              mountPath: /mnt/gpu-fb
           resources:
             requests:
               cpu: "2000m"
               memory: "8Gi"
             limits:
-              cpu: "8000m"
-              memory: "32Gi"
+              cpu: "4000m"
+              memory: "16Gi"
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
             claimName: fraud-det-v3-cpu-fb
-        - name: gpu-fb
-          persistentVolumeClaim:
-            claimName: fraud-det-v3-gpu-fb
 ---
 # Pod 2.2: GPU Preprocessing
-# Reads from GPU volume, writes to GPU volume (Step 2.2)
+# Isolated to GPU volume for high-performance feature engineering.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -254,19 +231,13 @@ spec:
         app: "preprocessing-gpu"
         tier: "preprocessing"
     spec:
-      securityContext:
-        runAsUser: 0
-      tolerations:
-      - key: "node.kubernetes.io/disk-pressure"
-        operator: "Exists"
-        effect: "NoSchedule"
       containers:
         - name: preprocessing-gpu
           image: apandit07650/fraud-det-v3-data-prep:gpu
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           env:
             - name: FLASHBLADE_PATH
-              value: "/mnt/cpu-fb"
+              value: "/mnt/gpu-fb"
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
@@ -278,8 +249,6 @@ spec:
             - name: PYTHONUNBUFFERED
               value: "1"
           volumeMounts:
-            - name: cpu-fb
-              mountPath: /mnt/cpu-fb
             - name: gpu-fb
               mountPath: /mnt/gpu-fb
           resources:
@@ -288,19 +257,16 @@ spec:
               memory: "8Gi"
               nvidia.com/gpu: "1"
             limits:
-              cpu: "4000m"
-              memory: "32Gi"
+              cpu: "2000m"
+              memory: "16Gi"
               nvidia.com/gpu: "1"
       volumes:
-        - name: cpu-fb
-          persistentVolumeClaim:
-            claimName: fraud-det-v3-cpu-fb
         - name: gpu-fb
           persistentVolumeClaim:
             claimName: fraud-det-v3-gpu-fb
 ---
 # Pod 3: GPU Model Training
-# Reads from GPU volume (first 1M), writes to both (Step 3)
+# Reads from GPU features, writes models to both volumes for distribution.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -320,19 +286,13 @@ spec:
         app: "model-build"
         tier: "training"
     spec:
-      securityContext:
-        runAsUser: 0
-      tolerations:
-      - key: "node.kubernetes.io/disk-pressure"
-        operator: "Exists"
-        effect: "NoSchedule"
       containers:
         - name: model-build
           image: apandit07650/fraud-det-v3-model-build:gpu
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           env:
             - name: FLASHBLADE_PATH
-              value: "/mnt/cpu-fb"
+              value: "/mnt/gpu-fb"
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
@@ -358,8 +318,8 @@ spec:
               memory: "16Gi"
               nvidia.com/gpu: "1"
             limits:
-              cpu: "8000m"
-              memory: "64Gi"
+              cpu: "6000m"
+              memory: "32Gi"
               nvidia.com/gpu: "1"
       volumes:
         - name: cpu-fb
@@ -370,7 +330,7 @@ spec:
             claimName: fraud-det-v3-gpu-fb
 ---
 # Pod 4.1: CPU Inference
-# Reads from CPU volume (models), writes to CPU volume (Step 4.1)
+# Serves models from CPU volume.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -390,16 +350,10 @@ spec:
         app: "inference-cpu"
         tier: "inference"
     spec:
-      securityContext:
-        runAsUser: 0
-      tolerations:
-      - key: "node.kubernetes.io/disk-pressure"
-        operator: "Exists"
-        effect: "NoSchedule"
       containers:
         - name: inference-cpu
           image: apandit07650/fraud-det-v3-inference:cpu
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           env:
             - name: FLASHBLADE_PATH
               value: "/mnt/cpu-fb"
@@ -407,8 +361,6 @@ spec:
               value: "true"
             - name: QUEUE_TYPE
               value: "flashblade"
-            - name: INPUT_PATH
-              value: "/mnt/cpu-fb/models"
             - name: MODEL_REPOSITORY
               value: "/mnt/cpu-fb/models"
             - name: OUTPUT_PATH
@@ -421,17 +373,17 @@ spec:
           resources:
             requests:
               cpu: "2000m"
-              memory: "16Gi"
+              memory: "8Gi"
             limits:
-              cpu: "8000m"
-              memory: "32Gi"
+              cpu: "4000m"
+              memory: "16Gi"
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
             claimName: fraud-det-v3-cpu-fb
 ---
 # Pod 4.2: GPU Inference
-# Reads from GPU volume (models), writes to GPU volume (Step 4.2)
+# Serves models from GPU volume.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -451,30 +403,20 @@ spec:
         app: "inference-gpu"
         tier: "inference"
     spec:
-      securityContext:
-        runAsUser: 0
-      tolerations:
-      - key: "node.kubernetes.io/disk-pressure"
-        operator: "Exists"
-        effect: "NoSchedule"
       containers:
         - name: inference-gpu
           image: apandit07650/fraud-det-v3-inference:latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
               name: http
             - containerPort: 8001
               name: grpc
-            - containerPort: 8002
-              name: metrics
           env:
             - name: FLASHBLADE_PATH
-              value: "/mnt/cpu-fb"
+              value: "/mnt/gpu-fb"
             - name: QUEUE_TYPE
               value: "flashblade"
-            - name: INPUT_PATH
-              value: "/mnt/gpu-fb/models"
             - name: MODEL_REPOSITORY
               value: "/mnt/gpu-fb/models"
             - name: OUTPUT_PATH
@@ -482,8 +424,6 @@ spec:
             - name: PYTHONUNBUFFERED
               value: "1"
           volumeMounts:
-            - name: cpu-fb
-              mountPath: /mnt/cpu-fb
             - name: gpu-fb
               mountPath: /mnt/gpu-fb
           resources:
@@ -492,13 +432,10 @@ spec:
               memory: "8Gi"
               nvidia.com/gpu: "1"
             limits:
-              cpu: "4000m"
-              memory: "32Gi"
+              cpu: "2000m"
+              memory: "16Gi"
               nvidia.com/gpu: "1"
       volumes:
-        - name: cpu-fb
-          persistentVolumeClaim:
-            claimName: fraud-det-v3-cpu-fb
         - name: gpu-fb
           persistentVolumeClaim:
             claimName: fraud-det-v3-gpu-fb
@@ -521,9 +458,6 @@ spec:
     - name: grpc
       port: 8001
       targetPort: 8001
-    - name: metrics
-      port: 8002
-      targetPort: 8002
 ---
 # ServiceAccount + RBAC for backend
 apiVersion: v1
