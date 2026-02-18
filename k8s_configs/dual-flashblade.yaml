@@ -150,10 +150,10 @@ spec:
           resources:
             requests:
               cpu: "2000m"
-              memory: "16Gi"
+              memory: "6Gi"
             limits:
               cpu: "4000m"
-              memory: "24Gi"
+              memory: "16Gi"
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
@@ -533,11 +533,11 @@ spec:
               mountPath: /mnt/gpu-fb
           resources:
             requests:
-              cpu: "100m"
-              memory: "256Mi"
-            limits:
               cpu: "1000m"
-              memory: "1Gi"
+              memory: "4Gi"
+            limits:
+              cpu: "2000m"
+              memory: "8Gi"
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
