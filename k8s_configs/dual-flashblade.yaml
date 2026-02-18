@@ -114,6 +114,11 @@ spec:
         app: "data-gather"
         tier: "generation"
     spec:
+      tolerations:
+        - key: "dedicated"
+          operator: "Equal"
+          value: "gpu"
+          effect: "NoSchedule"
       containers:
         - name: data-gather
           image: pduraiswamy16722/fraud-det-v3-data-gather:latest
@@ -178,6 +183,11 @@ spec:
         app: "preprocessing-cpu"
         tier: "preprocessing"
     spec:
+      tolerations:
+        - key: "dedicated"
+          operator: "Equal"
+          value: "gpu"
+          effect: "NoSchedule"
       containers:
         - name: preprocessing-cpu
           image: apandit07650/fraud-det-v3-data-prep:cpu
@@ -350,6 +360,11 @@ spec:
         app: "inference-cpu"
         tier: "inference"
     spec:
+      tolerations:
+        - key: "dedicated"
+          operator: "Equal"
+          value: "gpu"
+          effect: "NoSchedule"
       containers:
         - name: inference-cpu
           image: apandit07650/fraud-det-v3-inference:cpu
@@ -538,6 +553,10 @@ spec:
       tolerations:
         - key: "node.kubernetes.io/disk-pressure"
           operator: "Exists"
+          effect: "NoSchedule"
+        - key: "dedicated"
+          operator: "Equal"
+          value: "gpu"
           effect: "NoSchedule"
       serviceAccountName: fraud-backend
       containers:
