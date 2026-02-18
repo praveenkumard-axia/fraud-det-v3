@@ -62,7 +62,7 @@ def fetch_prometheus_metrics() -> Dict[str, Any]:
       PROMETHEUS_LATENCY_QUERY - latency ms
       PROMETHEUS_FB_READ_QUERY, PROMETHEUS_FB_WRITE_QUERY - FlashBlade-specific
     """
-    url = os.getenv("PROMETHEUS_URL", "http://prometheus:9090").strip()
+    url = os.getenv("PROMETHEUS_URL", "http://prometheus-service:9090").strip()
     if not url:
         return {}
 
