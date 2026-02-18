@@ -52,56 +52,73 @@ def log_telemetry(rows, throughput, elapsed, cpu_cores, mem_gb, mem_percent, fra
         pass
 
 def load_xgboost_model_cpu():
-    """Load XGBoost model for CPU inference (fallback when Triton unavailable)"""
+    """
+    Load XGBoost model for CPU inference.
+    Returns (model, feature_names, version_int) or (None, None, None).
+    Reads feature_names.json saved by the trainer so inference always uses
+    exactly the same columns the model was trained on.
+    """
     try:
-        # Try to find the latest model
         models_path = StoragePaths.get_path('models')
         model_dir = models_path / 'fraud_xgboost'
-        
+
         if not model_dir.exists():
             log(f"Model directory not found: {model_dir}")
-            return None
-        
-        # Find latest version
-        versions = sorted([d for d in model_dir.iterdir() if d.is_dir() and d.name.isdigit()],
-                         key=lambda x: int(x.name), reverse=True)
-        
+            return None, None, None
+
+        # Find latest version directory
+        versions = sorted(
+            [d for d in model_dir.iterdir() if d.is_dir() and d.name.isdigit()],
+            key=lambda x: int(x.name), reverse=True
+        )
         if not versions:
             log("No model versions found")
-            return None
-        
-        latest_version = versions[0]
-        model_file = latest_version / 'xgboost.json'
-        
+            return None, None, None
+
+        latest_version_dir = versions[0]
+        version_num = int(latest_version_dir.name)
+        model_file = latest_version_dir / 'xgboost.json'
+
         if not model_file.exists():
             log(f"Model file not found: {model_file}")
-            return None
-        
+            return None, None, None
+
         # Load model
         model = xgb.Booster()
         model.load_model(str(model_file))
-        log(f"✓ Loaded XGBoost model from {model_file} (CPU mode)")
-        return model
-        
+
+        # Load feature names saved by trainer — this is the source of truth
+        feature_names_file = model_dir / 'feature_names.json'
+        if feature_names_file.exists():
+            import json
+            with open(feature_names_file) as f:
+                feature_names = json.load(f)
+            log(f"✓ Loaded model v{version_num} with {len(feature_names)} features: {feature_names}")
+        else:
+            # Fallback: ask the booster itself (XGBoost >=1.6 stores feature names)
+            feature_names = model.feature_names
+            if feature_names:
+                log(f"✓ Loaded model v{version_num} — feature names from booster ({len(feature_names)} cols)")
+            else:
+                log(f"⚠ No feature_names.json found and booster has no feature names. "
+                    f"Inference may fail if column count mismatches.")
+                feature_names = None
+
+        return model, feature_names, version_num
+
     except Exception as e:
         log(f"Failed to load XGBoost model: {e}")
-        return None
+        return None, None, None
 
-def run_cpu_inference(xgb_model, input_array):
+def run_cpu_inference(xgb_model, input_array, feature_names=None):
     """Run inference using XGBoost on CPU"""
     try:
-        # Create DMatrix
-        dmatrix = xgb.DMatrix(input_array)
-        
-        # Run prediction
+        dmatrix = xgb.DMatrix(input_array, feature_names=feature_names)
         predictions = xgb_model.predict(dmatrix)
-        
         return predictions
-        
     except Exception as e:
         log(f"CPU inference failed: {e}")
-        # Fallback to simulation only if CPU inference fails
-        return np.random.rand(len(input_array)).astype(np.float32)
+        raise
 
 def main():
     signal.signal(signal.SIGINT, signal_handler)
@@ -151,22 +168,25 @@ def main():
     
     # Load CPU model if Triton not available
     cpu_model = None
+    cpu_feature_names = None
+    cpu_model_version = None
     if not triton_client:
-        cpu_model = load_xgboost_model_cpu()
+        cpu_model, cpu_feature_names, cpu_model_version = load_xgboost_model_cpu()
         if cpu_model:
-            log("✓ CPU inference mode enabled (real XGBoost predictions)")
+            log(f"✓ CPU inference mode enabled (real XGBoost predictions, {len(cpu_feature_names) if cpu_feature_names else '?'} features)")
         else:
             log("⚠ No model available yet - will wait and retry while in continuous mode")
-    
+
     if not continuous_mode:
         # Original single-shot mode
         if not triton_client and not cpu_model:
-             log("❌ No model available for single-shot inference")
-             sys.exit(1)
+            log("❌ No model available for single-shot inference")
+            sys.exit(1)
         run_single_inference(triton_client, model_name)
     else:
-        # NEW: Continuous inference mode
-        run_continuous_inference(triton_client, cpu_model, model_name, batch_size, queue_service)
+        # Continuous inference mode
+        run_continuous_inference(triton_client, cpu_model, cpu_feature_names, cpu_model_version,
+                                 model_name, batch_size, queue_service)
 
 def run_single_inference(triton_client, model_name):
     """Original single-shot inference"""
@@ -204,25 +224,47 @@ def run_single_inference(triton_client, model_name):
         log(f"Inference failed: {e}")
         sys.exit(1)
 
-def run_continuous_inference(triton_client, cpu_model, model_name, batch_size, queue_service):
+def run_continuous_inference(triton_client, cpu_model, cpu_feature_names, cpu_model_version,
+                             model_name, batch_size, queue_service):
     """Continuous batch inference from queue"""
     log("Starting continuous inference mode...")
-    
+
     total_inferred = 0
     start_time = time.time()
-    
+
     # Threshold for business intelligence
     FRAUD_THRESHOLD = 0.52  # 52% probability
-    
+
     while not STOP_FLAG:
         try:
-            # CPU Mode: must have a model before consuming anything
-            if not triton_client and cpu_model is None:
-                cpu_model = load_xgboost_model_cpu()
+            # CPU Mode: wait for a model, then hot-reload if a newer version appears
+            if not triton_client:
                 if cpu_model is None:
-                    log("⌛ Waiting for model to be trained... (Inference pod paused)")
-                    time.sleep(10)
-                    continue
+                    cpu_model, cpu_feature_names, cpu_model_version = load_xgboost_model_cpu()
+                    if cpu_model is None:
+                        log("⌛ Waiting for model to be trained... (Inference pod paused)")
+                        time.sleep(10)
+                        continue
+                else:
+                    # Check for a newer model version every ~30 batches (lightweight)
+                    try:
+                        models_path = StoragePaths.get_path('models')
+                        model_dir = models_path / 'fraud_xgboost'
+                        if model_dir.exists():
+                            latest_dirs = sorted(
+                                [d for d in model_dir.iterdir() if d.is_dir() and d.name.isdigit()],
+                                key=lambda x: int(x.name), reverse=True
+                            )
+                            if latest_dirs:
+                                latest_ver = int(latest_dirs[0].name)
+                                if latest_ver > (cpu_model_version or 0):
+                                    log(f"🔄 New model version detected (v{latest_ver} > v{cpu_model_version}), reloading...")
+                                    new_model, new_feats, new_ver = load_xgboost_model_cpu()
+                                    if new_model is not None:
+                                        cpu_model, cpu_feature_names, cpu_model_version = new_model, new_feats, new_ver
+                                        log(f"✓ Hot-reloaded model v{cpu_model_version} with {len(cpu_feature_names) if cpu_feature_names else '?'} features")
+                    except Exception:
+                        pass  # Non-fatal — keep running with current model
 
             # Consume batch from features queue
             messages = queue_service.consume_batch(
@@ -230,38 +272,37 @@ def run_continuous_inference(triton_client, cpu_model, model_name, batch_size, q
                 batch_size=batch_size,
                 timeout=1.0
             )
-            
+
             if not messages:
                 time.sleep(0.5)
                 continue
-            
+
             log(f"Inferring batch of {len(messages):,} records...")
-            
-            # Prepare input data
-            # Extract features (20 features total, matching model build)
-            feature_cols = [
-                'amt', 'lat', 'long', 'city_pop', 'unix_time', 
+
+            # Build input array using EXACTLY the features the model was trained on.
+            # cpu_feature_names comes from feature_names.json written by the trainer,
+            # so it is guaranteed to match the model's expected column count.
+            feature_cols = cpu_feature_names if (not triton_client and cpu_feature_names) else [
+                'amt', 'lat', 'long', 'city_pop', 'unix_time',
                 'merch_lat', 'merch_long', 'merch_zipcode', 'zip',
-                'amt_log', 'hour_of_day', 'day_of_week', 
+                'amt_log', 'hour_of_day', 'day_of_week',
                 'is_weekend', 'is_night', 'distance_km',
-                'category_encoded', 'state_encoded', 'gender_encoded', 
+                'category_encoded', 'state_encoded', 'gender_encoded',
                 'city_pop_log', 'zip_region'
             ]
-            
+
             input_data = []
             for msg in messages:
                 row = [float(msg.get(col, 0)) for col in feature_cols]
                 input_data.append(row)
-            
+
             input_array = np.array(input_data, dtype=np.float32)
-            
+
             # Run inference
             if triton_client:
-                # Use Triton (GPU/optimized)
                 results = run_triton_inference(triton_client, model_name, input_array)
             else:
-                # Use CPU XGBoost (real predictions)
-                results = run_cpu_inference(cpu_model, input_array)
+                results = run_cpu_inference(cpu_model, input_array, feature_names=feature_cols)
             
             # Prepare output messages and track metrics
             output_messages = []

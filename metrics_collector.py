@@ -21,6 +21,18 @@ from k8s_scale import get_deployment_resources
 
 MAX_SERIES_LEN = 60
 
+# Module-level psutil cache (cpu_percent needs a prior call to set baseline)
+try:
+    import psutil as _psutil
+    _psutil.cpu_percent(interval=None)  # Prime the baseline on import
+    _PSUTIL_AVAILABLE = True
+except ImportError:
+    _psutil = None
+    _PSUTIL_AVAILABLE = False
+
+_cached_node_cpu_pct = 0.0
+_cached_node_ram_pct = 0.0
+
 try:
     from prometheus_metrics import fetch_prometheus_metrics
 except ImportError:
@@ -112,16 +124,36 @@ def collect_metrics(
     # CPU Utilization
     cpu_util_millicores = sum(p.get("cpu_millicores", 0) for p in pod_top)
     node_cpu_pct = prom.get("node_cpu_percent")
-    
-    # Use telemetry CPU if available in local mode
+    node_ram_pct = prom.get("node_ram_percent")
+
+    # Use telemetry CPU if available in local mode, but ALWAYS get real psutil values for node stats
     if LOCAL_MODE:
         cpu_util_pct = telemetry.get("cpu_percent", 0)
+        # Get real machine CPU/RAM from psutil for the utilization chart
+        if node_cpu_pct is None:
+            global _cached_node_cpu_pct, _cached_node_ram_pct
+            try:
+                if _PSUTIL_AVAILABLE:
+                    # cpu_percent(interval=None) returns real value after first baseline call
+                    new_cpu = _psutil.cpu_percent(interval=None)
+                    new_ram = _psutil.virtual_memory().percent
+                    # Only update cache if we got a non-zero reading (first call may still be 0)
+                    if new_cpu > 0:
+                        _cached_node_cpu_pct = round(new_cpu, 1)
+                    if new_ram > 0:
+                        _cached_node_ram_pct = round(new_ram, 1)
+                    node_cpu_pct = _cached_node_cpu_pct
+                    node_ram_pct = _cached_node_ram_pct
+            except Exception:
+                node_cpu_pct = _cached_node_cpu_pct or cpu_util_pct or 0
+                node_ram_pct = _cached_node_ram_pct or 0
     elif node_cpu_pct is not None:
         cpu_util_pct = node_cpu_pct
     else:
         # Fallback to sum of millicores vs total limit (approx 41 cores in manifest)
         total_cores_limit = 41.0
         cpu_util_pct = (cpu_util_millicores / (total_cores_limit * 1000.0)) * 100.0 if cpu_util_millicores > 0 else 0
+
         
     # --- NEW: Delta-based TPS Logic (to prevent pod throughput spikes) ---
     global _last_telemetry_stats
@@ -306,7 +338,7 @@ def collect_metrics(
             "pods": {
                 "generation": {
                     "no_of_generated": generated, 
-                    "stream_speed": int(cpu_throughput)
+                    "stream_speed": int(cpu_throughput) or telemetry.get("throughput", 0)
                 },
                 "prep": {
                     "no_of_transformed": processed, 

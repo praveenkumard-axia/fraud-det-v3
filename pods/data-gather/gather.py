@@ -421,6 +421,8 @@ def main():
                             if batch_data:
                                 queue_service.publish_batch(QueueTopics.RAW_TRANSACTIONS, batch_data)
                                 total_rows_generated += len(batch_data)
+                                # Update persistent metric for dashboard reliability
+                                queue_service.increment_metric("total_txns_generated", len(batch_data))
                         except Exception as e:
                             log(f"Error publishing to queue: {e}")
             
