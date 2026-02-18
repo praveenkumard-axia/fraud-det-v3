@@ -36,7 +36,7 @@ stop:
 	curl -s -X POST $(BACKEND_URL)/api/control/stop
 
 port-forward:
-	kubectl port-forward -n $(NAMESPACE) svc/backend 8000:8000
+	kubectl port-forward -n fraud-det-v3 svc/backend 8000:8000
 
 logs:
 	kubectl logs -n $(NAMESPACE) deployment/data-gather --tail=50 -f

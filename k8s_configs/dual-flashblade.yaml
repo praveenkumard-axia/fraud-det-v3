@@ -558,6 +558,15 @@ spec:
           operator: "Equal"
           value: "gpu"
           effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - slc6-lg-n3-b30-29
       serviceAccountName: fraud-backend
       containers:
         - name: backend

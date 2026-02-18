@@ -684,7 +684,6 @@ async def start_pipeline(background_tasks: BackgroundTasks):
         
     elif config_mode == "gpu":
         defaults["preprocessing-gpu"] = ScalingConfig.DEPLOYMENTS["preprocessing-gpu"]["default_replicas"]
-        defaults["model-build"] = ScalingConfig.DEPLOYMENTS["training"]["default_replicas"]
         defaults["inference-gpu"] = ScalingConfig.DEPLOYMENTS["inference-gpu"]["default_replicas"]
         
     else:
@@ -692,7 +691,6 @@ async def start_pipeline(background_tasks: BackgroundTasks):
             "preprocessing-cpu": ScalingConfig.DEPLOYMENTS["preprocessing"]["default_replicas"],
             "inference-cpu": ScalingConfig.DEPLOYMENTS["inference"]["default_replicas"],
             "preprocessing-gpu": ScalingConfig.DEPLOYMENTS["preprocessing-gpu"]["default_replicas"],
-            "model-build": ScalingConfig.DEPLOYMENTS["training"]["default_replicas"],
             "inference-gpu": ScalingConfig.DEPLOYMENTS["inference-gpu"]["default_replicas"],
         })
     errors = []
