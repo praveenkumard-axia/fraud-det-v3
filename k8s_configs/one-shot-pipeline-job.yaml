@@ -10,7 +10,7 @@ spec:
       restartPolicy: Never
       containers:
       - name: pipeline-orchestrator
-        image: apandit07650/fraud-det-v3-model-build:gpu
+        image: pduraiswamy16722/fraud-det-v3-model-build:gpu
         imagePullPolicy: IfNotPresent
         command:
         - /bin/bash
