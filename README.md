@@ -142,19 +142,34 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ---
 
-## Metrics (Prometheus / Pure1)
+---
 
-Set on backend deployment:
+## 🛠 Project Status & Setup (Latest Updates)
 
-**Local disk / General:**
-```bash
-kubectl set env deployment/backend -n fraud-det-v3 PROMETHEUS_URL=http://prometheus.monitoring:9090
+### Current Status
+- ✅ **Eviction Fix**: Backend memory request set to **1Gi** with **ephemeral-storage** limits.
+- ✅ **OOM Fix**: `data-gather` workers reduced to **4** with **16Gi** RAM limit.
+- ✅ **Prometheus Connectivity**: Configured to use external master at `http://10.23.181.153:9090`.
+- ✅ **Dashboard Stability**: Fixed JS typos and added DOM null checks.
+
+### Final Prometheus Configuration (cAdvisor)
+To enable pod-level CPU/Mem metrics on the dashboard, update your master Prometheus config:
+
+1. **Find config**: `ps aux | grep prometheus` (usually `/etc/prometheus/prometheus.yml`).
+2. **Apply job**: Add the following under `scrape_configs`:
+```yaml
+  - job_name: 'kubernetes-node-44-cadvisor'
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
+    bearer_token: "YOUR_TOKEN_HERE" # Generate with: kubectl create token prometheus-scraper -n monitoring
+    metrics_path: /metrics/cadvisor
+    static_configs:
+      - targets: ['10.23.181.44:10250']
 ```
+3. **Restart**: `sudo systemctl restart prometheus`.
 
-**FlashBlade (Pure1 + FB Prometheus):**
-```bash
-kubectl set env deployment/backend -n fraud-det-v3 PURE_SERVER=true PROMETHEUS_URL=http://prometheus.monitoring:9090
-```
+---
 
 ---
 
