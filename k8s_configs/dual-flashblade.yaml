@@ -385,6 +385,8 @@ spec:
               name: http
             - containerPort: 8001
               name: grpc
+            - containerPort: 8002
+              name: metrics
           env:
             - name: FLASHBLADE_PATH
               value: "/mnt/gpu-fb"
@@ -422,15 +424,22 @@ metadata:
   labels:
     app: "inference-gpu"
 spec:
+  type: NodePort
   selector:
     app: "inference-gpu"
   ports:
     - name: http
       port: 8000
       targetPort: 8000
+      nodePort: 30800
     - name: grpc
       port: 8001
       targetPort: 8001
+      nodePort: 30801
+    - name: metrics
+      port: 8002
+      targetPort: 8002
+      nodePort: 30802
 ---
 # ServiceAccount + RBAC for backend
 apiVersion: v1
