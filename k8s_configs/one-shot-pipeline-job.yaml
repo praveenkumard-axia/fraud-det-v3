@@ -42,6 +42,10 @@ spec:
           value: "flashblade"
         - name: FLASHBLADE_PATH
           value: "/mnt/cpu-fb"
+        - name: CPU_VOLUME_PATH
+          value: "/mnt/cpu-fb"
+        - name: GPU_VOLUME_PATH
+          value: "/mnt/gpu-fb"
         - name: PYTHONUNBUFFERED
           value: "1"
         resources:
@@ -61,7 +65,7 @@ spec:
       volumes:
       - name: cpu-fb
         persistentVolumeClaim:
-          claimName: fraud-det-v3-cpu-fb
+          claimName: fraud-det-v3-cpu-fb-v6
       - name: gpu-fb
         persistentVolumeClaim:
-          claimName: fraud-det-v3-gpu-fb
+          claimName: fraud-det-v3-gpu-fb-v6
