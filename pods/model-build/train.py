@@ -32,7 +32,7 @@ from config_contract import QueueTopics, StoragePaths, SystemPriorities
 # CPU imports
 import polars as pl
 import numpy as np
-import xgboost as xgb
+import pandas as pd
 
 logging.basicConfig(
     level=logging.INFO,
@@ -214,6 +214,7 @@ class ModelTrainer:
         start = time.time()
         
         if self.gpu_mode:
+            import cudf
             # GPU Path (simplified for this script, assumes single GPU fit or dask flow)
             df = cudf.read_parquet(filepath)
             df = df.fillna(0) # Simple imputation
@@ -227,10 +228,11 @@ class ModelTrainer:
             X_train = train_df[available_feats]
             y_train = train_df['is_fraud']
             
-            # STABILITY FIX: Move test data to CPU (numpy) early.
-            # This prevents CUDA context conflicts with XGBoost during evaluation.
-            X_test = test_df[available_feats].to_numpy()
-            y_test = test_df['is_fraud'].to_numpy()
+            # STABILITY FIX: Move test data to CPU early via to_pandas().values.
+            # This is more robust than direct .to_numpy() in mixed CUDA environments.
+            log.info(f"Moving test set ({len(test_df):,} records) to CPU memory...")
+            X_test = test_df[available_feats].to_pandas().values
+            y_test = test_df['is_fraud'].to_pandas().values
             
             log.info(f"Loaded {len(df):,} records on GPU (Test set moved to CPU) in {time.time()-start:.2f}s")
             return X_train, y_train, X_test, y_test, available_feats
@@ -269,6 +271,7 @@ class ModelTrainer:
 
     def train(self, X_train, y_train, X_test, y_test):
         """Train XGBoost model."""
+        import xgboost as xgb
         start = time.time()
         
         # Calculate scale_pos_weight for imbalance
