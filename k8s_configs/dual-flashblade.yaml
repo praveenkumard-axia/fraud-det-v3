@@ -14,7 +14,7 @@ metadata:
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: fraud-det-v3-cpu-fb-v5-pv
+  name: fraud-det-v3-cpu-fb-pv
   labels:
     storage: flashblade
     workload: cpu
@@ -39,7 +39,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: fraud-det-v3-gpu-fb-v5-pv
+  name: fraud-det-v3-gpu-fb-pv
   labels:
     storage: flashblade
     workload: gpu
@@ -63,7 +63,7 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: fraud-det-v3-cpu-fb-v5
+  name: fraud-det-v3-cpu-fb-v6
   namespace: fraud-det-v3
   labels:
     app: "fraud-det-v3"
@@ -75,13 +75,13 @@ spec:
     requests:
       storage: 500Gi
   storageClassName: ""
-  volumeName: fraud-det-v3-cpu-fb-v5-pv
+  volumeName: fraud-det-v3-cpu-fb-v6-pv
 ---
 # PVC 2: GPU Volume
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: fraud-det-v3-gpu-fb-v5
+  name: fraud-det-v3-gpu-fb-v6
   namespace: fraud-det-v3
   labels:
     app: "fraud-det-v3"
@@ -93,7 +93,7 @@ spec:
     requests:
       storage: 500Gi
   storageClassName: ""
-  volumeName: fraud-det-v3-gpu-fb-v5-pv
+  volumeName: fraud-det-v3-gpu-fb-v6-pv
 ---
 # Pod 1: Data Gather (CPU generation)
 # Orchestrates data generation with dual-volume archiving.
@@ -159,10 +159,10 @@ spec:
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
-            claimName: fraud-det-v3-cpu-fb-v5
+            claimName: fraud-det-v3-cpu-fb-v6
         - name: gpu-fb
           persistentVolumeClaim:
-            claimName: fraud-det-v3-gpu-fb-v5
+            claimName: fraud-det-v3-gpu-fb-v6
 ---
 # Pod 2.1: CPU Preprocessing
 # Isolated to CPU volume for resource efficiency.
@@ -220,7 +220,7 @@ spec:
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
-            claimName: fraud-det-v3-cpu-fb-v5
+            claimName: fraud-det-v3-cpu-fb-v6
 ---
 # Pod 2.2: GPU Preprocessing
 # Isolated to GPU volume for high-performance feature engineering.
@@ -275,7 +275,7 @@ spec:
       volumes:
         - name: gpu-fb
           persistentVolumeClaim:
-            claimName: fraud-det-v3-gpu-fb-v5
+            claimName: fraud-det-v3-gpu-fb-v6
 ---
 # Pod 4.1: CPU Inference
 # Serves models from CPU volume.
@@ -333,7 +333,7 @@ spec:
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
-            claimName: fraud-det-v3-cpu-fb-v5
+            claimName: fraud-det-v3-cpu-fb-v6
 ---
 # Pod 4.2: GPU Inference
 # Serves models from GPU volume.
@@ -391,7 +391,7 @@ spec:
       volumes:
         - name: gpu-fb
           persistentVolumeClaim:
-            claimName: fraud-det-v3-gpu-fb-v5
+            claimName: fraud-det-v3-gpu-fb-v6
 ---
 # Service for inference-gpu
 apiVersion: v1
