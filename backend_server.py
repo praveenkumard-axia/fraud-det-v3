@@ -592,10 +592,10 @@ def get_dashboard_data():
     fraud_blocked = real_high if total_samples > 0 else tel["fraud_blocked"]
     fraud_prevented_usd = fraud_blocked * avg_txn_amount
     
-    # Simulated throughput split
+    # Real data throughput
     total_throughput = tel["throughput"]
-    gpu_throughput = int(total_throughput * 0.7)
-    cpu_throughput = int(total_throughput * 0.3)
+    gpu_throughput = tel.get("throughput_gpu", 0)
+    cpu_throughput = tel.get("throughput_cpu", 0)
     
     # FlashBlade metrics (now using dual-volume telemetry)
     fb_cpu_throughput = tel.get("fb_cpu_throughput", 0)

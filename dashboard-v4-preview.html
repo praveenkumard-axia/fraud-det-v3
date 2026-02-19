@@ -2677,9 +2677,9 @@
         }).join('') || '<div class="bar-row"><div class="bar-label">No data</div><div class="bar-val">—</div></div>';
       }
 
-      const recent = b.recent_risk_signals || [];
+      const recent = b.recent_risk_signals;
       const recentEl = el('recent-signals-container');
-      if (recentEl && Array.isArray(recent)) {
+      if (recentEl && Array.isArray(recent) && recent.length > 0) {
         recentEl.innerHTML = recent.slice(0, 10).map(r => {
           const score = r.risk_score ?? 0;
           const cls = score >= 90 ? 'high' : score >= 70 ? 'medium' : 'low';
@@ -3030,9 +3030,9 @@
           if (currentProcessed > lastProcessedCount) {
             const deltaTxns = currentProcessed - lastProcessedCount;
             combinedTPS = Math.round(deltaTxns / deltaSec);
-            // Split roughly based on architecture
-            cpuTPS = Math.round(combinedTPS * 0.3); // Preprocessing
-            gpuTPS = Math.round(combinedTPS * 0.7); // Inference
+            // Use real backend metrics if available, otherwise 0
+            cpuTPS = (throughput.tps_cpu || 0);
+            gpuTPS = (throughput.tps_gpu || 0);
 
             // Update last known non-zero values
             lastCombinedTPS = combinedTPS;
