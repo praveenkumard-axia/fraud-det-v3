@@ -136,8 +136,9 @@ class ModelTrainer:
         # NEW: Queue service for business metrics
         self.queue_service = get_queue_service()
         
-        # Load existing model if available
-        self.load_previous_model()
+        # Load existing model if available (Skip in single-shot to avoid CUDA conflict)
+        if self.continuous_mode:
+            self.load_previous_model()
 
     def load_previous_model(self):
         """Try to load the most recent existing model from output path"""
@@ -606,7 +607,16 @@ parameters [
             self.run_single()
 
 def main():
-    signal.signal(signal.SIGINT, signal_handler)
+    # Initialize CUDA context early if GPU is available to prevent context invalidation
+    if GPU_AVAILABLE:
+        try:
+            from numba import cuda
+            cuda.select_device(0)
+            log.info("✓ CUDA Device 0 selected and initialized")
+        except Exception as e:
+            log.warning(f"Could not initialize CUDA context: {e}")
+
+    parser = argparse.ArgumentParser(description="Fraud Detection Model Trainer")
     signal.signal(signal.SIGTERM, signal_handler)
     
     input_dir = os.getenv('INPUT_DIR', 'auto')
