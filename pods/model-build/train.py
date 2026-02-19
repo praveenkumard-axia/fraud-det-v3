@@ -224,10 +224,13 @@ class ModelTrainer:
             
             X_train = train_df[available_feats]
             y_train = train_df['is_fraud']
-            X_test = test_df[available_feats]
-            y_test = test_df['is_fraud']
             
-            log.info(f"Loaded {len(df):,} records on GPU in {time.time()-start:.2f}s")
+            # STABILITY FIX: Move test data to CPU (numpy) early.
+            # This prevents CUDA context conflicts with XGBoost during evaluation.
+            X_test = test_df[available_feats].to_numpy()
+            y_test = test_df['is_fraud'].to_numpy()
+            
+            log.info(f"Loaded {len(df):,} records on GPU (Test set moved to CPU) in {time.time()-start:.2f}s")
             return X_train, y_train, X_test, y_test, available_feats
             
         else:
@@ -326,25 +329,22 @@ class ModelTrainer:
         
         # XGBoost prediction (Booster requires DMatrix)
         import xgboost as xgb
+        # Stability fix: X_test and y_test are already numpy arrays from prepare_data
         dtest = xgb.DMatrix(X_test)
         preds = model.predict(dtest)
         
-        # Stability fix: Move all to CPU for evaluation logic to avoid CUDA context issues
+        # Ensure preds is also numpy
         import numpy as np
         if hasattr(preds, 'get'):
             preds_np = preds.get()
         else:
             preds_np = np.array(preds)
             
-        if hasattr(y_test, 'to_numpy'):
-            y_test_np = y_test.to_numpy()
-        elif hasattr(y_test, 'get'):
-            y_test_np = y_test.get()
-        else:
-            y_test_np = np.array(y_test)
-
         pred_labels = (preds_np > 0.5).astype(int)
         
+        # X_test and y_test are already numpy now
+        y_test_np = y_test 
+
         # Correctly calculate TP, FP, FN, TN
         tp = int(((pred_labels == 1) & (y_test_np == 1)).sum())
         fp = int(((pred_labels == 1) & (y_test_np == 0)).sum())
