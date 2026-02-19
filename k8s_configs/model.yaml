@@ -19,7 +19,7 @@ spec:
       containers:
       - name: pipeline-orchestrator
         image: pduraiswamy16722/fraud-det-v3-model-build:gpu
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         command:
         - /bin/bash
         - -c
