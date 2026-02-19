@@ -29,11 +29,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from queue_interface import get_queue_service
 from config_contract import QueueTopics, StoragePaths, SystemPriorities
 
-# CPU imports
-import polars as pl
-import numpy as np
-import pandas as pd
-
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s | %(levelname)s | %(message)s'
@@ -78,13 +73,14 @@ def log_telemetry(rows, throughput, elapsed, cpu_cores, mem_gb, mem_percent, sta
     except:
         pass
 
-# Check for GPU availability
-try:
-    import cudf
-    import cupy as cp
-    GPU_AVAILABLE = True
-except ImportError:
-    GPU_AVAILABLE = False
+def is_gpu_available():
+    """Lazy check for GPU availability without polluting context."""
+    try:
+        import cudf
+        import cupy as cp
+        return True
+    except ImportError:
+        return False
 
 # Features for model training (aligned with prepare.py output)
 FEATURE_COLUMNS = [
@@ -106,7 +102,7 @@ class ModelTrainer:
         self.input_path = StoragePaths.get_path('features') if input_dir == 'auto' else Path(input_dir)
         self.output_path = StoragePaths.get_path('models') if output_dir == 'auto' else Path(output_dir)
         self.output_path.mkdir(parents=True, exist_ok=True)
-        self.gpu_mode = GPU_AVAILABLE and (os.getenv('FORCE_CPU', 'false').lower() != 'true')
+        self.gpu_mode = is_gpu_available() and (os.getenv('FORCE_CPU', 'false').lower() != 'true')
         
         # NEW: Continuous mode configuration
         self.continuous_mode = os.getenv('CONTINUOUS_MODE', 'true').lower() == 'true'
@@ -215,6 +211,7 @@ class ModelTrainer:
         
         if self.gpu_mode:
             import cudf
+            import cupy as cp
             # GPU Path (simplified for this script, assumes single GPU fit or dask flow)
             df = cudf.read_parquet(filepath)
             df = df.fillna(0) # Simple imputation
@@ -228,16 +225,22 @@ class ModelTrainer:
             X_train = train_df[available_feats]
             y_train = train_df['is_fraud']
             
-            # STABILITY FIX: Move test data to CPU early via to_pandas().values.
-            # This is more robust than direct .to_numpy() in mixed CUDA environments.
-            log.info(f"Moving test set ({len(test_df):,} records) to CPU memory...")
-            X_test = test_df[available_feats].to_pandas().values
-            y_test = test_df['is_fraud'].to_pandas().values
+            # STABILITY FIX: Use cupy to bridge to numpy - often more stable than .to_pandas()
+            log.info(f"Moving test set ({len(test_df):,} records) to CPU memory via Cupy bridge...")
+            try:
+                X_test = cp.asnumpy(test_df[available_feats].to_cupy())
+                y_test = cp.asnumpy(test_df['is_fraud'].to_cupy())
+            except Exception as e:
+                log.warning(f"Cupy bridge failed, falling back to to_pandas: {e}")
+                X_test = test_df[available_feats].to_pandas().values
+                y_test = test_df['is_fraud'].to_pandas().values
             
             log.info(f"Loaded {len(df):,} records on GPU (Test set moved to CPU) in {time.time()-start:.2f}s")
             return X_train, y_train, X_test, y_test, available_feats
             
         else:
+            import polars as pl
+            import numpy as np
             # CPU Path with Polars
             df = pl.read_parquet(filepath)
             
@@ -325,6 +328,8 @@ class ModelTrainer:
 
     def evaluate(self, model, X_test, y_test):
         """Evaluate model and persist REAL performance metrics"""
+        import xgboost as xgb
+        import numpy as np
         log.info(f"Evaluating model on {len(y_test)} test samples...")
         
         # Log class distribution in test set
@@ -611,15 +616,6 @@ parameters [
             self.run_single()
 
 def main():
-    # Initialize CUDA context early if GPU is available to prevent context invalidation
-    if GPU_AVAILABLE:
-        try:
-            from numba import cuda
-            cuda.select_device(0)
-            log.info("✓ CUDA Device 0 selected and initialized")
-        except Exception as e:
-            log.warning(f"Could not initialize CUDA context: {e}")
-
     parser = argparse.ArgumentParser(description="Fraud Detection Model Trainer")
     signal.signal(signal.SIGTERM, signal_handler)
     
@@ -638,6 +634,7 @@ def main():
         
         # Get total rows from features to report throughput
         try:
+            import polars as pl
             features_file = trainer.load_features()
             total_rows = pl.scan_parquet(features_file).select(pl.len()).collect().item()
         except:
