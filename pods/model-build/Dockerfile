@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
 COPY queue_interface.py config_contract.py ./
-COPY pods/model-build/train.py ./
+COPY pods/ pods/
 
 ENV PREP_OUTPUT_DIR=/data/input
 ENV FA_MOUNT=/data/models
