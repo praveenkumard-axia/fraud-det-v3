@@ -206,7 +206,7 @@ class ScaleConfig(BaseModel):
     preprocessing_pods: int = 1
     training_pods: int = 1
     inference_pods: int = 1
-    generation_rate: int = 50000
+    generation_rate: int = 100000
 
 
 class ResourcePatchRequest(BaseModel):

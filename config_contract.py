@@ -175,8 +175,8 @@ class GenerationRateLimits:
     """
     
     MIN_RATE = 1000     
-    MAX_RATE = 100000   
-    DEFAULT_RATE = 50000
+    MAX_RATE = 1000000   
+    DEFAULT_RATE = 100000
 
 
 class MetricsConfig:
