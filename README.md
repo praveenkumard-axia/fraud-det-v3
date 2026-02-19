@@ -394,30 +394,32 @@ If you observe duplicate processing or skipped batches, verify that all writes u
 ```
 fraud-det-v3/
 ├── backend_server.py          # FastAPI backend — REST API and dashboard server
-├── prometheus_metrics.py      # Metric bridging: FlashBlade + DCGM → Prometheus
+├── config_contract.py         # Configuration definitions and environment mapping
+├── k8s_scale.py               # Kubernetes scaling and resource patching logic
+├── metrics_collector.py       # Metrics aggregation and polling logic
+├── prometheus_metrics.py      # Prometheus PromQL bridge for storage/resource stats
+├── queue_interface.py         # FlashBlade file-based queuing implementation
 ├── build-images.sh            # Unified multi-component image build script
-├── requirements.txt
-├── .env.example
+├── dashboard-v4-preview.html  # Real-time monitoring dashboard (Frontend)
+├── requirements.txt           # Global dependencies
+├── .env                       # Environment configuration (Infra/Storage)
 │
-├── k8s_configs/
-│   ├── dual-flashblade.yaml   # Main deployment manifest (PVs, PVCs, all pods)
-│   ├── model.yaml             # One-shot training Job manifest
-│   └── prometheus-rbac.yaml   # Service accounts, roles, and role bindings
+├── pods/                      # Pipeline component source code
+│   ├── data-gather/           # Transaction generator (CPU)
+│   ├── data-prep/             # Feature engineering (CPU + RAPIDS GPU)
+│   ├── inference/             # Model serving (CPU + Triton GPU)
+│   └── model-build/           # Model training pipeline (XGBoost GPU)
 │
-├── data_gather/               # Transaction generator source
-├── preprocessing/
-│   ├── cpu/                   # Polars-based feature engineering
-│   └── gpu/                   # RAPIDS cuDF-based feature engineering
-├── inference/
-│   ├── cpu/                   # XGBoost CPU serving
-│   └── gpu/                   # Triton Inference Server integration
-├── model_build/               # Training pipeline (XGBoost + GPU)
+├── k8s_configs/               # Kubernetes Manifests
+│   ├── dual-flashblade.yaml   # Main deployment (PVs, PVCs, Deployments)
+│   ├── model.yaml             # One-shot training Job
+│   └── prometheus-rbac.yaml   # Service Accounts and Roles
 │
-└── dashboard-v4-preview.html  # Real-time monitoring dashboard
+└── run_pipeline.py            # Local orchestration helper
 ```
 
 ---
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+Apache License 2.0
