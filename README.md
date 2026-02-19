@@ -27,8 +27,8 @@ graph TD
     end
 
     subgraph "FlashBlade Storage"
-        CV[("/mnt/cpu-fb (CPU Volume)") ]
-        GV[("/mnt/gpu-fb (GPU Volume)") ]
+        CV[("/mnt/cpu-fb: CPU Volume")]
+        GV[("/mnt/gpu-fb: GPU Volume")]
     end
 
     DG -->|Writes Raw| CV
