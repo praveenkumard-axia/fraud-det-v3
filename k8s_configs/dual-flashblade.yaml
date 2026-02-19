@@ -14,7 +14,7 @@ metadata:
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: fraud-det-v3-cpu-fb-pv
+  name: fraud-det-v3-cpu-fb-v6-pv
   labels:
     storage: flashblade
     workload: cpu
@@ -33,13 +33,15 @@ spec:
     - tcp
     - hard
     - intr
+    - noatime
+    - nconnect=8
 ---
 # PV 2: GPU Volume (Manual)
 # Dedicated path for GPU-optimized features and high-throughput data.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: fraud-det-v3-gpu-fb-pv
+  name: fraud-det-v3-gpu-fb-v6-pv
   labels:
     storage: flashblade
     workload: gpu
@@ -58,6 +60,8 @@ spec:
     - tcp
     - hard
     - intr
+    - noatime
+    - nconnect=8
 ---
 # PVC 1: CPU Volume
 apiVersion: v1
