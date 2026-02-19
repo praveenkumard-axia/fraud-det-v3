@@ -287,7 +287,8 @@ class ModelTrainer:
                 'max_depth': 8,
                 'learning_rate': 0.1,
                 'scale_pos_weight': scale_pos_weight,
-                'tree_method': 'gpu_hist',
+                'tree_method': 'hist',
+                'device': 'cuda',
             }
         else:
             dtrain = xgb.DMatrix(X_train, label=y_train)
@@ -327,13 +328,28 @@ class ModelTrainer:
         import xgboost as xgb
         dtest = xgb.DMatrix(X_test)
         preds = model.predict(dtest)
-        pred_labels = (preds > 0.5).astype(int)
+        
+        # Stability fix: Move all to CPU for evaluation logic to avoid CUDA context issues
+        import numpy as np
+        if hasattr(preds, 'get'):
+            preds_np = preds.get()
+        else:
+            preds_np = np.array(preds)
+            
+        if hasattr(y_test, 'to_numpy'):
+            y_test_np = y_test.to_numpy()
+        elif hasattr(y_test, 'get'):
+            y_test_np = y_test.get()
+        else:
+            y_test_np = np.array(y_test)
+
+        pred_labels = (preds_np > 0.5).astype(int)
         
         # Correctly calculate TP, FP, FN, TN
-        tp = int(((pred_labels == 1) & (y_test == 1)).sum())
-        fp = int(((pred_labels == 1) & (y_test == 0)).sum())
-        fn = int(((pred_labels == 0) & (y_test == 1)).sum())
-        tn = int(((pred_labels == 0) & (y_test == 0)).sum())
+        tp = int(((pred_labels == 1) & (y_test_np == 1)).sum())
+        fp = int(((pred_labels == 1) & (y_test_np == 0)).sum())
+        fn = int(((pred_labels == 0) & (y_test_np == 1)).sum())
+        tn = int(((pred_labels == 0) & (y_test_np == 0)).sum())
         
         log.info(f"Confusion Matrix: TP={tp}, FP={fp}, FN={fn}, TN={tn}")
         
