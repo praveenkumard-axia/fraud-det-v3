@@ -1205,7 +1205,10 @@ async def get_pipeline_queues():
         "queues": response,
         "throughput": {
             "processed": total_processed,
-            "generated": generated_count
+            "generated": generated_count,
+            "tps_cpu": state.telemetry.get("throughput_cpu", 0),
+            "tps_gpu": state.telemetry.get("throughput_gpu", 0),
+            "fb_read": state.telemetry.get("fb_cpu_throughput", 0) + state.telemetry.get("fb_gpu_throughput", 0),
         },
         "timestamp": time.time()
     }

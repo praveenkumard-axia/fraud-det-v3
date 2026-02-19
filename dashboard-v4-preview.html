@@ -3067,7 +3067,7 @@
 
         animateDynamicBar('tech-generated-bar', 'tech-generated', throughput.generated || (raw + feat + inf));
 
-        if (combinedTPS > 0) {
+        if (combinedTPS > 0 || cpuTPS > 0 || gpuTPS > 0) {
           // CPU/GPU TPS values — bars driven by animateDynamicBar from WebSocket, only update text labels here
           if (el('throughput-cpu-val')) el('throughput-cpu-val').innerHTML = fmtNum(cpuTPS) + ' <span style="font-size: 11px; color: var(--text-muted);">TPS</span>';
           if (el('throughput-gpu-val')) el('throughput-gpu-val').innerHTML = fmtNum(gpuTPS) + ' <span style="font-size: 11px; color: var(--text-muted);">TPS</span>';
@@ -3080,6 +3080,10 @@
         } else {
           if (el('throughput-cpu-val')) el('throughput-cpu-val').innerHTML = '0 <span style="font-size: 11px; color: var(--text-muted);">TPS</span>';
           if (el('throughput-gpu-val')) el('throughput-gpu-val').innerHTML = '0 <span style="font-size: 11px; color: var(--text-muted);">TPS</span>';
+          if (el('tbl-cpu-tps')) el('tbl-cpu-tps').textContent = '\u2014';
+          if (el('tbl-gpu-tps')) el('tbl-gpu-tps').textContent = '\u2014';
+          if (el('tbl-cpu2-tps')) el('tbl-cpu2-tps').textContent = '\u2014';
+          if (el('tbl-gpu2-tps')) el('tbl-gpu2-tps').textContent = '\u2014';
         }
 
         // Update Combined Header
@@ -3094,18 +3098,22 @@
         if (el('hw-fb-write')) el('hw-fb-write').textContent = (el('fb-write') ? el('fb-write').textContent : '0 MB/s');
         if (el('hw-fb-util')) el('hw-fb-util').textContent = fbU + '%';
         if (el('hw-fb-util-bar')) el('hw-fb-util-bar').style.width = fbU + '%';
+
         // Hardware tab mirrors (Machine Metrics table)
-        if (el('hw-tbl-cpu-tps')) el('hw-tbl-cpu-tps').textContent = combinedTPS > 0 ? fmtNum(cpuTPS) : '\u2014';
-        if (el('hw-tbl-gpu-tps')) el('hw-tbl-gpu-tps').textContent = combinedTPS > 0 ? fmtNum(gpuTPS) : '\u2014';
+        const showTPS = (combinedTPS > 0 || cpuTPS > 0 || gpuTPS > 0);
+        if (el('hw-tbl-cpu-tps')) el('hw-tbl-cpu-tps').textContent = showTPS ? fmtNum(cpuTPS) : '\u2014';
+        if (el('hw-tbl-gpu-tps')) el('hw-tbl-gpu-tps').textContent = showTPS ? fmtNum(gpuTPS) : '\u2014';
         if (el('hw-tbl-cpu-util')) el('hw-tbl-cpu-util').textContent = cpuU + '%';
         if (el('hw-tbl-gpu-util')) el('hw-tbl-gpu-util').textContent = gpuU + '%';
+
         // CPU vs FlashBlade table
-        if (el('hw-tbl-cpu2-tps')) el('hw-tbl-cpu2-tps').textContent = combinedTPS > 0 ? fmtNum(cpuTPS) : '\u2014';
+        if (el('hw-tbl-cpu2-tps')) el('hw-tbl-cpu2-tps').textContent = showTPS ? fmtNum(cpuTPS) : '\u2014';
         if (el('hw-tbl-cpu2-util')) el('hw-tbl-cpu2-util').textContent = cpuU + '%';
         if (el('hw-tbl-fb-mbps')) el('hw-tbl-fb-mbps').textContent = el('tbl-fb-mbps') ? el('tbl-fb-mbps').textContent : '\u2014';
         if (el('hw-tbl-fb-util')) el('hw-tbl-fb-util').textContent = fbU + '%';
+
         // GPU vs FlashBlade table
-        if (el('hw-tbl-gpu2-tps')) el('hw-tbl-gpu2-tps').textContent = combinedTPS > 0 ? fmtNum(gpuTPS) : '\u2014';
+        if (el('hw-tbl-gpu2-tps')) el('hw-tbl-gpu2-tps').textContent = showTPS ? fmtNum(gpuTPS) : '\u2014';
         if (el('hw-tbl-gpu2-util')) el('hw-tbl-gpu2-util').textContent = gpuU + '%';
         if (el('hw-tbl-fb2-mbps')) el('hw-tbl-fb2-mbps').textContent = el('tbl-fb2-mbps') ? el('tbl-fb2-mbps').textContent : '\u2014';
         if (el('hw-tbl-fb2-util')) el('hw-tbl-fb2-util').textContent = fbU + '%';
