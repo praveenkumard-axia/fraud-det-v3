@@ -3371,12 +3371,16 @@
         const r = await fetch(API('/api/control/scale'));
         const j = await r.json();
         scaleState = { preprocessing: j.preprocessing_pods ?? 0, inference: j.inference_pods ?? 0, preprocessing_gpu: j.preprocessing_gpu_pods ?? 0, inference_gpu: j.inference_gpu_pods ?? 0, generation_rate: j.generation_rate ?? 10000 };
-        document.getElementById('scale-preprocessing').textContent = scaleState.preprocessing;
-        document.getElementById('scale-inference').textContent = scaleState.inference;
-        document.getElementById('scale-preprocessing-gpu').textContent = scaleState.preprocessing_gpu;
-        document.getElementById('scale-inference-gpu').textContent = scaleState.inference_gpu;
+
+        // Null checks for tech-tab elements (prevent JS errors on other tabs)
+        if (el('scale-preprocessing')) el('scale-preprocessing').textContent = scaleState.preprocessing;
+        if (el('scale-inference')) el('scale-inference').textContent = scaleState.inference;
+        if (el('scale-preprocessing-gpu')) el('scale-preprocessing-gpu').textContent = scaleState.preprocessing_gpu;
+        if (el('scale-inference-gpu')) el('scale-inference-gpu').textContent = scaleState.inference_gpu;
+
         const gs = document.getElementById('generator-speed');
         if (gs) { gs.value = scaleState.generation_rate; document.getElementById('generator-speed-val').textContent = fmtNum(scaleState.generation_rate); }
+
         const running = j.is_running;
         pipelineRunning = running;
         if (document.getElementById('live-text')) document.getElementById('live-text').textContent = running ? 'LIVE' : 'STOPPED';
@@ -3399,7 +3403,6 @@
           const r = await fetch(API('/api/control/start'), { method: 'POST' });
           const j = await r.json();
           if (j.success) {
-            b
             isPollingAllowed = true;
             await fetchScale();
             // Start BOTH polls so both tabs and global sidebars stay updated
