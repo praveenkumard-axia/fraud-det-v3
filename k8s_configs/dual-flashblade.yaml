@@ -247,6 +247,14 @@ spec:
         app: "preprocessing-gpu"
         tier: "preprocessing"
     spec:
+      tolerations:
+      - key: dedicated
+        operator: Equal
+        value: gpu
+        effect: NoSchedule
+      - key: node.kubernetes.io/disk-pressure
+        operator: Exists
+        effect: NoSchedule
       containers:
         - name: preprocessing-gpu
           image: pduraiswamy16722/fraud-det-v3-data-prep:gpu
@@ -360,6 +368,14 @@ spec:
         app: "inference-gpu"
         tier: "inference"
     spec:
+      tolerations:
+      - key: dedicated
+        operator: Equal
+        value: gpu
+        effect: NoSchedule
+      - key: node.kubernetes.io/disk-pressure
+        operator: Exists
+        effect: NoSchedule
       containers:
         - name: inference-gpu
           image: pduraiswamy16722/fraud-det-v3-inference:latest
