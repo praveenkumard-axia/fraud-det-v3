@@ -6,7 +6,7 @@
     tls_config:
       insecure_skip_verify: true
     bearer_token: "eyJhbGciOiJSUzI1NiIsImtpZCI6IkdQNlMzZFJkUE56QmMyRm12VUNsdFBRS1hka0VNNGZJZjJRWHMyU2xfbUEifQ.eyJhdWQiOlsiaHR0cHM6Ly9rdWJlcm5ldGVzLmRlZmF1bHQuc3ZjLmNsdXN0ZXIubG9jYWwiXSwiZXhwIjoxODAzMDQzNTAyLCJpYXQiOjE3NzE1MDc1MDIsImlzcyI6Imh0dHBzOi8va3ViZXJuZXRlcy5kZWZhdWx0LnN2Yy5jbHVzdGVyLmxvY2FsIiwianRpIjoiZjc0YjFhZTQtODE4YS00YmQyLTk4YzQtNzEyZDhlZGZjOTNkIiwia3ViZXJuZXRlcy5pbyI6eyJuYW1lc3BhY2UiOiJtb25pdG9yaW5nIiwic2VydmljZWFjY291bnQiOnsibmFtZSI6InByb21ldGhldXMtc2NyYXBlciIsInVpZCI6IjJkZDUzMDQwLTgwMTctNGM3Mi04Yzc0LWExOWFhNWYzZTkxMiJ9fSwibmJmIjoxNzcxNTA3NTAyLCJzdWIiOiJzeXN0ZW06c2VydmljZWFjY291bnQ6bW9uaXRvcmluZzpwcm9tZXRoZXVzLXNjcmFwZXIifQ.fG6Ln7AaoBUo98aRnpjvw0ktb9CcRvm8DAOn-FQzo3wfN_OBu_76lkGyRFy0Ou9R3s-JqtqLWOIM999sQ2KbMzdxBvmVwFrX75M6gzKXD7EPgv56oTDGLszNIx1epZqm86MPQRvXTmgJc9F6Bj27TWdHMc5p8rwLkarz2Go3854_zWbxN-7zYnXdmj-99dP4yF06z42fBRXIQsjSBCYTpPpZ9s7P4o0_IJD8mM2xozUKkRsC8YdSNZlmD6aVEJQzqZuAkCGyiuI17mlxJTlfGuFK3lkhxXEbOSg7bd53zlhKxLwrjVSqIFGLXs3mEC_dLmIPRX3sr-fM3WaeLkli7A"
-    metrics_path: /api/v1/nodes/slc6-lg-n3-b30-44/proxy/metrics/cadvisor
+    metrics_path: /metrics/cadvisor
     static_configs:
       - targets:
-        - '10.23.181.153:6443' 
+        - '10.23.181.44:10250'
