@@ -37,8 +37,8 @@ spec:
           export OUTPUT_PATH="/mnt/gpu-fb/features"
           python3 pods/data-prep/prepare.py
 
-          echo "Starting Pipeline Step 3: Model Training (1M Sample Limit)..."
-          export TRAIN_SAMPLE_LIMIT=1000000
+          echo "Starting Pipeline Step 3: Model Training (500k Sample Limit)..."
+          export TRAIN_SAMPLE_LIMIT=500000
           export INPUT_PATH="/mnt/gpu-fb/features"
           export OUTPUT_PATH="/mnt/cpu-fb/models"
           export OUTPUT_PATH_SECONDARY="/mnt/gpu-fb/models"
