@@ -69,11 +69,11 @@ def fetch_prometheus_metrics() -> Dict[str, Any]:
     # Default queries: node_exporter disk throughput (bytes/s -> MB/s)
     read_q = os.getenv(
         "PROMETHEUS_READ_THROUGHPUT_QUERY",
-        "sum(rate(node_disk_read_bytes_total[1m])) / 1024 / 1024",
+        'sum(rate(node_disk_read_bytes_total{instance="10.23.181.44:9100"}[1m])) / 1024 / 1024',
     )
     write_q = os.getenv(
         "PROMETHEUS_WRITE_THROUGHPUT_QUERY",
-        "sum(rate(node_disk_written_bytes_total[1m])) / 1024 / 1024",
+        'sum(rate(node_disk_written_bytes_total{instance="10.23.181.44:9100"}[1m])) / 1024 / 1024',
     )
     util_q = os.getenv("PROMETHEUS_UTIL_QUERY", "100")  # e.g. flashblade_util_percent
     latency_q = os.getenv("PROMETHEUS_LATENCY_QUERY", "0")  # e.g. histogram_quantile
@@ -81,11 +81,11 @@ def fetch_prometheus_metrics() -> Dict[str, Any]:
     # Node Exporter CPU/Mem Metrics
     node_cpu_q = os.getenv(
         "PROMETHEUS_NODE_CPU_QUERY",
-        "100 - (avg(rate(node_cpu_seconds_total{mode='idle'}[1m])) * 100)"
+        "100 - (avg(rate(node_cpu_seconds_total{mode='idle',instance='10.23.181.44:9100'}[1m])) * 100)"
     )
     node_mem_q = os.getenv(
         "PROMETHEUS_NODE_MEM_QUERY",
-        "((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes) * 100"
+        "((node_memory_MemTotal_bytes{instance='10.23.181.44:9100'} - node_memory_MemAvailable_bytes{instance='10.23.181.44:9100'}) / node_memory_MemTotal_bytes{instance='10.23.181.44:9100'}) * 100"
     )
 
     # 1. Primary Node Stats
