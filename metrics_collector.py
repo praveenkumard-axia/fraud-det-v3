@@ -60,15 +60,32 @@ _last_fb_stats = {
     "gpu": {"ts": 0.0, "bytes": 0}
 }
 
+# Cache for directory sizes to prevent excessive FlashBlade scans (Phase 4 optimization)
+_dir_size_cache = {}
+_DIR_SIZE_TTL = 15.0 # Cache for 15s
+
 def _get_dir_size(path: Path) -> int:
-    """Calculate total size of files in a directory (recursive to capture run_TIMESTAMP subdirs)."""
+    """Calculate total size of files in a directory (cached for 15s to prevent FB pressure)."""
+    now = time.time()
+    path_str = str(path)
+    
+    # Check cache first
+    if path_str in _dir_size_cache:
+        cached_val, cached_ts = _dir_size_cache[path_str]
+        if now - cached_ts < _DIR_SIZE_TTL:
+            return cached_val
+
     try:
         if not path.exists():
             return 0
-        # Recursive glob to find all files in subdirectories
-        return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+        
+        # Optimized: Only walk the directory if cache is stale
+        # Recursive glob is still heavy, but now it only happens every 15s instead of 1s
+        size = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
+        _dir_size_cache[path_str] = (size, now)
+        return size
     except Exception:
-        return 0
+        return _dir_size_cache.get(path_str, (0, 0))[0]
 
 def _kubectl_top_pods(namespace: str) -> List[Dict[str, Any]]:
     """Fetch real-time CPU/Mem usage from kubectl top pods."""
