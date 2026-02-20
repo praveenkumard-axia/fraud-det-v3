@@ -9,6 +9,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install uvicorn
 RUN pip install fastapi
+RUN pip install -r requirements.txt
 
 COPY backend_server.py config_contract.py queue_interface.py k8s_scale.py metrics_collector.py prometheus_metrics.py pure1_metrics.py local_disk_metrics.py ./
 COPY dashboard-v4-preview.html ./
