@@ -72,6 +72,8 @@ def fetch_prometheus_metrics() -> Dict[str, Any]:
     fb_write_q = 'sum(purefb_file_systems_performance_bandwidth_bytes{dimension="write_bytes_per_sec"}) / 1024 / 1024'
     fb_iops_q = 'sum(purefb_file_systems_performance_throughput_iops)'
     fb_latency_q = 'avg(purefb_file_systems_performance_latency_usec) / 1000'
+    fb_array_per_q = 'sum(purefb_array_performance_throughput_iops)' #to check the throughputof the data
+
 
     # 2. CPU UTILIZATION & BREAKDOWN
     cpu_total_q = '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[1m])) * 100)'
@@ -90,6 +92,8 @@ def fetch_prometheus_metrics() -> Dict[str, Any]:
     fb_write = _prometheus_query(url, fb_write_q) or 0
     fb_iops = _prometheus_query(url, fb_iops_q) or 0
     fb_latency = _prometheus_query(url, fb_latency_q) or 0
+    fb_throughput = _prometheus_query(url, fb_array_per_q) or 0
+
     
     cpu_total = _prometheus_query(url, cpu_total_q) or 0
     cpu_user = _prometheus_query(url, cpu_user_q) or 0
@@ -111,6 +115,7 @@ def fetch_prometheus_metrics() -> Dict[str, Any]:
         "fb_write_mbps": round(fb_write, 2),
         "fb_iops": int(fb_iops),
         "fb_latency_ms": round(fb_latency, 2),
+	    "fb_throughput": round(fb_throughput, 2),
         
         "node_cpu_percent": round(cpu_total, 2),
         "cpu_user_percent": round(cpu_user, 2),
@@ -125,3 +130,4 @@ def fetch_prometheus_metrics() -> Dict[str, Any]:
     }
     
     return out
+

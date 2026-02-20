@@ -12,6 +12,7 @@ import asyncio
 import subprocess
 import threading
 import re
+from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Optional, List
@@ -36,8 +37,43 @@ from config_contract import (
 BASE_DIR = Path(__file__).parent
 PODS_DIR = BASE_DIR / "pods"
 
-# FastAPI App
-app = FastAPI(title="Fraud Detection Dashboard Backend v4")
+# FastAPI App with Lifespan
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """MODERNIZED: Handle startup and shutdown events."""
+    # Startup: Start metrics poller and telemetry loops
+    # Initialize directory for metrics JSON
+    METRICS_JSON_PATH.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Pre-initialize metrics JSON with idle state to prevent 404s
+    if not METRICS_JSON_PATH.exists():
+        idle_data = {
+            "cpu": [], "gpu": [], "fb": [], "fb_cpu": [], "fb_gpu": [],
+            "is_running": False, "timestamp": time.time(),
+            "kpis": {"1_fraud_exposure_identified_usd": 0, "2_transactions_analyzed": 0, "3_high_risk_flagged": 0},
+            "business": {
+                "no_of_generated": 0, "no_of_processed": 0, "no_fraud": 0,
+                "pods": {
+                    "generation": {"no_of_generated": 0, "stream_speed": 0},
+                    "prep": {"no_of_transformed": 0, "prep_velocity": 0},
+                    "model_train": {"samples_trained": 0, "status": "Idle"},
+                    "inference": {"fraud": 0, "non_fraud": 0, "percent_score": 0}
+                }
+            }
+        }
+        try:
+            with open(METRICS_JSON_PATH, "w") as f:
+                json.dump(idle_data, f, indent=2)
+            print(f"📊 Initialized dashboard metrics at {METRICS_JSON_PATH}")
+        except Exception as e:
+            print(f"⚠️ Failed to initialize metrics JSON: {e}")
+
+    asyncio.create_task(_k8s_telemetry_loop())
+    asyncio.create_task(_metrics_poll_loop())
+    yield
+    # Shutdown: Clean up if needed
+
+app = FastAPI(title="Fraud Detection Dashboard Backend v4", lifespan=lifespan)
 
 # Enable CORS
 app.add_middleware(
@@ -65,8 +101,8 @@ async def add_performance_headers(request, call_next):
     response.headers["X-Response-Time"] = f"{duration_ms:.2f}ms"
     
     # Log slow requests
-    if duration_ms > 100:
-        print(f"⚠️  SLOW API: {request.url.path} took {duration_ms:.0f}ms")
+    # if duration_ms > 100:
+    #     print(f"⚠️  SLOW API: {request.url.path} took {duration_ms:.0f}ms")
     # elif duration_ms < 10:
     #     print(f"⚡ FAST API: {request.url.path} took {duration_ms:.1f}ms")
     
@@ -289,8 +325,8 @@ class PipelineState:
     
     def update_telemetry(self, stage: str, status: str, rows: int, throughput: int, 
                          elapsed: float, cpu_percent: float, ram_percent: float,
-                         fraud_blocked: Optional[int] = None):
-        """Update telemetry from pod output"""
+                         fraud_blocked: Optional[int] = None, **kwargs):
+        """Update telemetry from pod output with support for extra metrics"""
         with self.lock:
             self.telemetry["current_stage"] = stage
             self.telemetry["current_status"] = status
@@ -298,34 +334,50 @@ class PipelineState:
             self.telemetry["cpu_percent"] = cpu_percent
             self.telemetry["ram_percent"] = ram_percent
             
+            # Update extra metrics (e.g. tps_cpu, tps_gpu, util, etc.)
+            for k, v in kwargs.items():
+                self.telemetry[k] = v
+
             # Map stage to appropriate counter
             if stage == "Ingest":
                 self.telemetry["generated"] = max(self.telemetry.get("generated", 0), rows)
                 self.telemetry["throughput_cpu"] = throughput  # Ingest is usually CPU
             elif stage == "Data Prep":
+                # Detail for hardware charts
+                self.telemetry["tps_cpu"] = kwargs.get("cpu_tps", throughput if not kwargs.get("gpu_mode") else throughput * 0.1)
+                self.telemetry["tps_gpu"] = kwargs.get("gpu_tps", throughput if kwargs.get("gpu_mode") else 0)
+                self.telemetry["util_cpu"] = kwargs.get("cpu_util", cpu_percent)
+                self.telemetry["util_gpu"] = kwargs.get("gpu_util", 0)
+                
                 self.telemetry["data_prep_cpu"] = int(rows * 0.4)
                 self.telemetry["data_prep_gpu"] = int(rows * 0.6)
                 self.telemetry["txns_scored"] = rows
-                self.telemetry["throughput_cpu"] = throughput # Data prep is CPU-bound here
+                self.telemetry["throughput_cpu"] = throughput
                 # Data Prep processes generated data — generated >= prep rows
                 self.telemetry["generated"] = max(self.telemetry.get("generated", 0), rows)
             elif stage == "Model Train":
-                self.telemetry["txns_scored"] = rows
+                self.telemetry["samples_trained"] = rows
                 # Model trained on generated data
                 self.telemetry["generated"] = max(self.telemetry.get("generated", 0), rows)
             elif stage == "Inference":
+                # Detail for hardware charts
+                self.telemetry["tps_cpu"] = kwargs.get("cpu_tps", int(throughput * 0.3))
+                self.telemetry["tps_gpu"] = kwargs.get("gpu_tps", int(throughput * 0.7))
+                self.telemetry["util_cpu"] = kwargs.get("cpu_util", cpu_percent)
+                self.telemetry["util_gpu"] = kwargs.get("gpu_util", 0)
+
                 self.telemetry["inference_cpu"] = int(rows * 0.3)
                 self.telemetry["inference_gpu"] = int(rows * 0.7)
                 self.telemetry["txns_scored"] = rows
-                self.telemetry["throughput_gpu"] = throughput # Inference is typically GPU/Triton
+                self.telemetry["throughput_gpu"] = throughput
                 # Inference processes generated data — generated >= inference rows
                 self.telemetry["generated"] = max(self.telemetry.get("generated", 0), rows)
             
             # Calculate or use REAL fraud metrics
             if fraud_blocked is not None:
                 self.telemetry["fraud_blocked"] = fraud_blocked
-            else:
-                # Fallback to 0.5% fraud rate if not provided (e.g. from data-prep stage)
+            elif self.telemetry.get("txns_scored", 0) > 0:
+                # Fallback to 0.5% fraud rate if not provided 
                 fraud_rate = 0.005
                 self.telemetry["fraud_blocked"] = int(self.telemetry["txns_scored"] * fraud_rate)
             
@@ -402,7 +454,7 @@ def run_pod_async(pod_name: str, script_path: str):
                 
                 line = line.strip()
                 # Print to console for visibility
-                print(f"[{pod_name}] {line}")
+                # print(f"[{pod_name}] {line}")
                 
                 # Parse telemetry
                 telemetry = parse_telemetry_line(line)
@@ -438,7 +490,7 @@ def run_pod_async(pod_name: str, script_path: str):
 async def _tail_pod_logs(pod_name: str):
     """Tail logs for a single K8s pod and parse telemetry."""
     from k8s_scale import NAMESPACE
-    print(f"Started tailing logs for K8s pod: {pod_name}")
+    # print(f"Started tailing logs for K8s pod: {pod_name}")
     
     try:
         process = await asyncio.create_subprocess_exec(
@@ -810,14 +862,14 @@ kubectl run exhaustive-cleanup --image=busybox --restart=Never -n fraud-det-v3 -
         # Step 4: Clear Redis Queues, Streams, and Stats
         state.queue_service.clear_all()
         
-        # Step 4.5: Delete trained models and local data (Local filesystem cleanup)
+        # Step 4.5: Delete training data but PRESERVE trained models
         try:
             import shutil
             for vol in ["cpu", "gpu"]:
                 for path_type in ["raw", "features", "results"]:
+                    # NOTE: "models" is intentionally excluded to preserve trained models
                     target_dir = StoragePaths.get_path(path_type, volume=vol)
                     if target_dir.exists():
-                        # Wipe contents rather than deleting the dir itself to avoid permission issues
                         for item in target_dir.iterdir():
                             if item.is_file(): item.unlink()
                             elif item.is_dir(): shutil.rmtree(item)
@@ -1596,11 +1648,7 @@ async def _metrics_poll_loop():
         await asyncio.sleep(1)
 
 
-@app.on_event("startup")
-async def start_metrics_poller():
-    """Start the 1s metrics collector loop."""
-    asyncio.create_task(_metrics_poll_loop())
-    asyncio.create_task(_k8s_telemetry_loop())
+
 
 
 @app.websocket("/data/dashboard")
@@ -1807,5 +1855,5 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=8000,
-        log_level="info"
+        log_level="warning"
     )
