@@ -13,9 +13,6 @@ spec:
         operator: Equal
         value: gpu
         effect: NoSchedule
-      - key: node.kubernetes.io/disk-pressure
-        operator: Exists
-        effect: NoSchedule
       containers:
       - name: pipeline-orchestrator
         image: pduraiswamy16722/fraud-det-v3-model-build:gpu
@@ -58,12 +55,12 @@ spec:
           value: "1"
         resources:
           requests:
-            cpu: "2"
-            memory: "16Gi"
+            cpu: "8"
+            memory: "24Gi"
             nvidia.com/gpu: "1"
           limits:
-            cpu: "6"
-            memory: "32Gi"
+            cpu: "8"
+            memory: "24Gi"
             nvidia.com/gpu: "1"
         volumeMounts:
         - name: cpu-fb

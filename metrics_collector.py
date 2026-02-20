@@ -65,27 +65,41 @@ _dir_size_cache = {}
 _DIR_SIZE_TTL = 15.0 # Cache for 15s
 
 def _get_dir_size(path: Path) -> int:
-    """Calculate total size of files in a directory (cached for 15s to prevent FB pressure)."""
+    """Calculate total size of files in a directory (recursive to capture run_TIMESTAMP subdirs)."""
+    # NEW: 15-second cache to prevent FlashBlade pressure
+    global _dir_size_cache
     now = time.time()
-    path_str = str(path)
+    path_key = str(path)
     
-    # Check cache first
-    if path_str in _dir_size_cache:
-        cached_val, cached_ts = _dir_size_cache[path_str]
-        if now - cached_ts < _DIR_SIZE_TTL:
-            return cached_val
-
+    if "_dir_size_cache" not in globals():
+        _dir_size_cache = {}
+        
+    if path_key in _dir_size_cache:
+        last_val, last_ts = _dir_size_cache[path_key]
+        if now - last_ts < _DIR_SIZE_TTL:
+            return last_val
+            
+    total = 0
     try:
         if not path.exists():
             return 0
         
-        # Optimized: Only walk the directory if cache is stale
-        # Recursive glob is still heavy, but now it only happens every 15s instead of 1s
-        size = sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
-        _dir_size_cache[path_str] = (size, now)
-        return size
+        # Use os.walk for better performance and memory efficiency than rglob
+        # This avoids building a massive list of all files in memory
+        import os
+        for root, dirs, files in os.walk(str(path)):
+            for f in files:
+                try:
+                    fp = os.path.join(root, f)
+                    total += os.path.getsize(fp)
+                except (OSError, Exception):
+                    continue
+                    
+        # Update cache
+        _dir_size_cache[path_key] = (total, now)
+        return total
     except Exception:
-        return _dir_size_cache.get(path_str, (0, 0))[0]
+        return 0
 
 def _kubectl_top_pods(namespace: str) -> List[Dict[str, Any]]:
     """Fetch real-time CPU/Mem usage from kubectl top pods."""

@@ -252,9 +252,6 @@ spec:
         operator: Equal
         value: gpu
         effect: NoSchedule
-      - key: node.kubernetes.io/disk-pressure
-        operator: Exists
-        effect: NoSchedule
       containers:
         - name: preprocessing-gpu
           image: pduraiswamy16722/fraud-det-v3-data-prep:gpu
@@ -373,9 +370,6 @@ spec:
         operator: Equal
         value: gpu
         effect: NoSchedule
-      - key: node.kubernetes.io/disk-pressure
-        operator: Exists
-        effect: NoSchedule
       containers:
         - name: inference-gpu
           image: pduraiswamy16722/fraud-det-v3-inference:latest
@@ -458,7 +452,7 @@ rules:
     resources: ["deployments", "deployments/scale"]
     verbs: ["get", "list", "patch", "update"]
   - apiGroups: [""]
-    resources: ["pods"]
+    resources: ["pods", "pods/log"]
     verbs: ["get", "list", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
