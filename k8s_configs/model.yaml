@@ -41,6 +41,7 @@ spec:
           export TRAIN_SAMPLE_LIMIT=1000000
           export INPUT_PATH="/mnt/cpu-fb/features"
           export OUTPUT_PATH="/mnt/cpu-fb/models"
+          export OUTPUT_PATH_SECONDARY="/mnt/gpu-fb/models"
           python3 pods/model-build/train.py
 
           echo "Pipeline Complete. Model stored in /mnt/cpu-fb/models"
