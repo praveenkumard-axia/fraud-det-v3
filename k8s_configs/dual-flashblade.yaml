@@ -157,9 +157,11 @@ spec:
             requests:
               cpu: "2000m"
               memory: "6Gi"
+              ephemeral-storage: "4Gi"
             limits:
               cpu: "4000m"
               memory: "16Gi"
+              ephemeral-storage: "4Gi"
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
@@ -216,11 +218,13 @@ spec:
               mountPath: /mnt/cpu-fb
           resources:
             requests:
-              cpu: "2000m"
-              memory: "8Gi"
+              cpu: "4000m"
+              memory: "16Gi"
+              ephemeral-storage: "4Gi"
             limits:
               cpu: "4000m"
               memory: "16Gi"
+              ephemeral-storage: "4Gi"
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
@@ -274,8 +278,8 @@ spec:
               mountPath: /mnt/gpu-fb
           resources:
             requests:
-              cpu: "1000m"
-              memory: "8Gi"
+              cpu: "2000m"
+              memory: "16Gi"
               nvidia.com/gpu: "1"
             limits:
               cpu: "2000m"
@@ -334,8 +338,8 @@ spec:
               mountPath: /mnt/cpu-fb
           resources:
             requests:
-              cpu: "2000m"
-              memory: "8Gi"
+              cpu: "4000m"
+              memory: "16Gi"
             limits:
               cpu: "4000m"
               memory: "16Gi"
@@ -397,8 +401,8 @@ spec:
               mountPath: /mnt/gpu-fb
           resources:
             requests:
-              cpu: "1000m"
-              memory: "8Gi"
+              cpu: "2000m"
+              memory: "16Gi"
               nvidia.com/gpu: "1"
             limits:
               cpu: "2000m"
