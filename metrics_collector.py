@@ -190,31 +190,27 @@ def collect_metrics(
         cpu_util_pct = (cpu_util_millicores / (total_cores_limit * 1000.0)) * 100.0 if cpu_util_millicores > 0 else 0
 
         
-    # --- NEW: Delta-based TPS Logic (to prevent pod throughput spikes) ---
     global _last_telemetry_stats
     if "_last_telemetry_stats" not in globals():
         _last_telemetry_stats = {"ts": ts, "gen": 0, "proc": 0}
     
     t_delta = ts - _last_telemetry_stats["ts"]
     
-    m_store = queue_service.get_metrics()
+    # m_store = queue_service.get_metrics()
     
-    generated_store = m_store.get("total_txns_generated", 0)
-    generated_tel = telemetry.get("generated", 0)
-    generated = max(generated_store, generated_tel)
+    # generated_store = m_store.get("total_txns_generated", 0)
+    # generated_tel = telemetry.get("generated", 0)
+    # generated = max(generated_store, generated_tel)
         
-    # 'Processed' for Data Prep = total_txns_scored
-    processed_store = m_store.get("total_txns_scored", 0)
-    processed_tel = telemetry.get("txns_scored", 0)
-    processed = max(processed_store, processed_tel)
+    # processed_store = m_store.get("total_txns_scored", 0)
+    # processed_tel = telemetry.get("txns_scored", 0)
+    # processed = max(processed_store, processed_tel)
 
-    # UI Split for hardware charts (fallback to 40%/60% if no real split)
-    data_prep_cpu = telemetry.get("data_prep_cpu", int(processed * 0.4))
-    data_prep_gpu = telemetry.get("data_prep_gpu", int(processed * 0.6))
+    # data_prep_cpu = telemetry.get("data_prep_cpu", int(processed * 0.4))
+    # data_prep_gpu = telemetry.get("data_prep_gpu", int(processed * 0.6))
     
-    # Ensure processed reflects the sum used in UI
-    if processed == 0 and (data_prep_cpu > 0 or data_prep_gpu > 0):
-        processed = data_prep_cpu + data_prep_gpu
+    # if processed == 0 and (data_prep_cpu > 0 or data_prep_gpu > 0):
+    #     processed = data_prep_cpu + data_prep_gpu
 
     # Calculate REAL TPS based on delta rows / delta time
     if t_delta > 0.1: # Minimum interval for sanity
