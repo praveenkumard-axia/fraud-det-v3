@@ -820,18 +820,19 @@ kubectl run exhaustive-cleanup --image=busybox --restart=Never -n fraud-det-v3 -
         # Step 4: Clear Redis Queues, Streams, and Stats
         state.queue_service.clear_all()
         
-        # Step 4.5: Delete trained models and local data (Local filesystem cleanup)
+        # Step 4.5: Delete training data but PRESERVE trained models
         try:
             import shutil
             for vol in ["cpu", "gpu"]:
-                for path_type in ["models", "raw", "features", "results"]:
+                for path_type in ["raw", "features", "results"]:
+                    # NOTE: "models" is intentionally excluded to preserve trained models
                     target_dir = StoragePaths.get_path(path_type, volume=vol)
                     if target_dir.exists():
-                        # Wipe contents rather than deleting the dir itself to avoid permission issues
                         for item in target_dir.iterdir():
                             if item.is_file(): item.unlink()
                             elif item.is_dir(): shutil.rmtree(item)
                         print(f"✓ Cleared {path_type} in {target_dir}")
+            print("✓ Trained models preserved (not wiped)")
         except Exception as e:
             print(f"Warning during local data cleanup: {e}")
         

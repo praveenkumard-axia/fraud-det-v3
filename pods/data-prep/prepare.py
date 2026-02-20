@@ -292,8 +292,8 @@ class DataPrepService:
             ddf['is_weekend'] = (ddf['day_of_week'] >= 5).astype('int8')
             ddf['is_night'] = ((ddf['hour_of_day'] >= 22) | (ddf['hour_of_day'] <= 6)).astype('int8')
             
-        # Amount log
-        ddf['amt_log'] = ddf['amt'].log1p()
+        # Amount log (cuDF uses (x+1).log() NOT log1p)
+        ddf['amt_log'] = (ddf['amt'] + 1).log()
         
         # Distance
         if all(x in ddf.columns for x in ["lat", "long", "merch_lat", "merch_long"]):
@@ -304,7 +304,7 @@ class DataPrepService:
         ddf['category_encoded'] = ddf['category'].hash_values() % 1000
         ddf['state_encoded'] = ddf['state'].hash_values() % 100
         ddf['gender_encoded'] = (ddf['gender'] == 'M').astype('int8')
-        ddf['city_pop_log'] = ddf['city_pop'].log1p()
+        ddf['city_pop_log'] = (ddf['city_pop'] + 1).log()
         ddf['zip_region'] = (ddf['zip'] // 10000).astype('int32')
         
         # 3. Cleanup columns
