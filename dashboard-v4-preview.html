@@ -2185,7 +2185,8 @@
       } else if (num >= 1000) {
         return (num / 1000).toFixed(1) + 'K';
       }
-      return num.toString();
+      return Math.round(num).toString();
+      // return num.toString();
     }
 
     // Global helper for element selection
@@ -2558,8 +2559,8 @@
 
       const fb = (data.fb && data.fb.length) ? data.fb[data.fb.length - 1] : {};
       const fbUtil = fb.util || 0;
-      if (document.getElementById('fb-read')) document.getElementById('fb-read').textContent = (fb.read_mbps ?? fb.throughput_mbps ?? 0).toFixed(1) + ' MB/s';
-      if (document.getElementById('fb-write')) document.getElementById('fb-write').textContent = (fb.write_mbps ?? fb.throughput_mbps ?? 0).toFixed(1) + ' MB/s';
+      if (document.getElementById('fb-read')) document.getElementById('fb-read').textContent = (fb.read_mbps ?? fb.throughput_mbps ?? 0).toFixed(0) + ' MB/s';
+      if (document.getElementById('fb-write')) document.getElementById('fb-write').textContent = (fb.write_mbps ?? fb.throughput_mbps ?? 0).toFixed(0) + ' MB/s';
       if (document.getElementById('fb-util')) document.getElementById('fb-util').textContent = fbUtil + '%';
 
       const fbBar = document.getElementById('fb-util-bar');
@@ -2985,16 +2986,16 @@
         // Estimate Util for chart
         fbU = Math.min(100, Math.round(fbVal / 20)); // Assume 2000MB/s max
 
-        if (el('mm-fb')) el('mm-fb').textContent = fbVal.toFixed(1);
-        if (el('fb-read')) el('fb-read').textContent = totalRead.toFixed(1) + ' MB/s';
-        if (el('fb-write')) el('fb-write').textContent = totalWrite.toFixed(1) + ' MB/s';
+        if (el('mm-fb')) el('mm-fb').textContent = fbVal.toFixed(0);
+        if (el('fb-read')) el('fb-read').textContent = totalRead.toFixed(0) + ' MB/s';
+        if (el('fb-write')) el('fb-write').textContent = totalWrite.toFixed(0) + ' MB/s';
         if (el('fb-util')) el('fb-util').textContent = fbU + '%';
         if (el('fb-util-bar')) el('fb-util-bar').style.width = fbU + '%';
 
 
         // Detailed Tables - Storage
-        if (el('tbl-fb-mbps')) el('tbl-fb-mbps').textContent = (totalRead * 0.3).toFixed(1) + ' MB/s';
-        if (el('tbl-fb2-mbps')) el('tbl-fb2-mbps').textContent = (totalRead * 0.7 + totalWrite).toFixed(1) + ' MB/s';
+        if (el('tbl-fb-mbps')) el('tbl-fb-mbps').textContent = (totalRead * 0.3).toFixed(0) + ' MB/s';
+        if (el('tbl-fb2-mbps')) el('tbl-fb2-mbps').textContent = (totalRead * 0.7 + totalWrite).toFixed(0) + ' MB/s';
         if (el('tbl-fb-util')) el('tbl-fb-util').textContent = fbU + '%';
         if (el('tbl-fb2-util')) el('tbl-fb2-util').textContent = fbU + '%';
 
@@ -3534,13 +3535,13 @@
             // Prep (FlashBlade CPU storage)
             { label: 'Prep CPU (TPS)', data: hwTrendData.prepCpuTPS, borderColor: '#3b82f6', tension: 0.3, fill: false, borderWidth: 2 },
             { label: 'Prep GPU (TPS)', data: hwTrendData.prepGpuTPS, borderColor: '#8b5cf6', tension: 0.3, fill: false, borderWidth: 2 },
-            { label: 'FlashBlade CPU (Read)', data: hwTrendData.prepFbRead, borderColor: '#60a5fa', tension: 0.3, borderDash: [4, 2], fill: false, borderWidth: 1.5 },
-            { label: 'FlashBlade CPU (Write)', data: hwTrendData.prepFbWrite, borderColor: '#a78bfa', tension: 0.3, borderDash: [4, 2], fill: false, borderWidth: 1.5 },
+            // { label: 'FlashBlade CPU (Read)', data: hwTrendData.prepFbRead, borderColor: '#60a5fa', tension: 0.3, borderDash: [4, 2], fill: false, borderWidth: 1.5 },
+            // { label: 'FlashBlade CPU (Write)', data: hwTrendData.prepFbWrite, borderColor: '#a78bfa', tension: 0.3, borderDash: [4, 2], fill: false, borderWidth: 1.5 },
             // Inf (FlashBlade GPU storage)
             { label: 'Inf CPU (TPS)', data: hwTrendData.infCpuTPS, borderColor: '#10b981', tension: 0.3, fill: false, borderWidth: 2 },
             { label: 'Inf GPU (TPS)', data: hwTrendData.infGpuTPS, borderColor: '#f59e0b', tension: 0.3, fill: false, borderWidth: 2 },
-            { label: 'FlashBlade GPU (Read)', data: hwTrendData.infFbRead, borderColor: '#34d399', tension: 0.3, borderDash: [2, 2], fill: false, borderWidth: 1.5 },
-            { label: 'FlashBlade GPU (Write)', data: hwTrendData.infFbWrite, borderColor: '#fbbf24', tension: 0.3, borderDash: [2, 2], fill: false, borderWidth: 1.5 }
+            // { label: 'FlashBlade GPU (Read)', data: hwTrendData.infFbRead, borderColor: '#34d399', tension: 0.3, borderDash: [2, 2], fill: false, borderWidth: 1.5 },
+            // { label: 'FlashBlade GPU (Write)', data: hwTrendData.infFbWrite, borderColor: '#fbbf24', tension: 0.3, borderDash: [2, 2], fill: false, borderWidth: 1.5 }
           ]
         },
         options: {
