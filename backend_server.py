@@ -69,7 +69,7 @@ async def lifespan(app: FastAPI):
             print(f"⚠️ Failed to initialize metrics JSON: {e}")
 
     asyncio.create_task(_k8s_telemetry_loop())
-    asyncio.create_task(_k8s_metrics_loop())
+    asyncio.create_task(_metrics_poll_loop())
     yield
     # Shutdown: Clean up if needed
 
