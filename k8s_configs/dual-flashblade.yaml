@@ -276,6 +276,8 @@ spec:
           volumeMounts:
             - name: gpu-fb
               mountPath: /mnt/gpu-fb
+            - name: cpu-fb
+              mountPath: /mnt/cpu-fb
           resources:
             requests:
               cpu: "2000m"
@@ -289,6 +291,9 @@ spec:
         - name: gpu-fb
           persistentVolumeClaim:
             claimName: fraud-det-v3-gpu-fb-v6
+        - name: cpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-det-v3-cpu-fb-v6
 ---
 # Pod 4.1: CPU Inference
 # Serves models from CPU volume.
@@ -399,6 +404,8 @@ spec:
           volumeMounts:
             - name: gpu-fb
               mountPath: /mnt/gpu-fb
+            - name: cpu-fb
+              mountPath: /mnt/cpu-fb
           resources:
             requests:
               cpu: "2000m"
@@ -412,6 +419,9 @@ spec:
         - name: gpu-fb
           persistentVolumeClaim:
             claimName: fraud-det-v3-gpu-fb-v6
+        - name: cpu-fb
+          persistentVolumeClaim:
+            claimName: fraud-det-v3-cpu-fb-v6
 ---
 # Service for inference-gpu
 apiVersion: v1

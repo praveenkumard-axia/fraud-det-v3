@@ -100,7 +100,7 @@ STRING_COLUMNS_TO_DROP = [
 
 class DataPrepService:
     def __init__(self):
-        self.input_dir = StoragePaths.get_path('raw_data')
+        self.input_dir = StoragePaths.get_path('raw')
         self.output_dir = StoragePaths.get_path('features')
         self.output_dir.mkdir(parents=True, exist_ok=True)
         

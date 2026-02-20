@@ -225,15 +225,11 @@ class ModelTrainer:
             X_train = train_df[available_feats]
             y_train = train_df['is_fraud']
             
-            # STABILITY FIX: Use cupy to bridge to numpy - often more stable than .to_pandas()
-            log.info(f"Moving test set ({len(test_df):,} records) to CPU memory via Cupy bridge...")
-            try:
-                X_test = cp.asnumpy(test_df[available_feats].to_cupy())
-                y_test = cp.asnumpy(test_df['is_fraud'].to_cupy())
-            except Exception as e:
-                log.warning(f"Cupy bridge failed, falling back to to_pandas: {e}")
-                X_test = test_df[available_feats].to_pandas().values
-                y_test = test_df['is_fraud'].to_pandas().values
+            # SAFE: always move test set to pandas/numpy to avoid cupy bridge issues
+            # X_train stays as cuDF for fast GPU DMatrix creation
+            log.info(f"Moving test set ({len(test_df):,} records) to CPU memory via pandas...")
+            X_test = test_df[available_feats].to_pandas().values.astype("float32")
+            y_test = test_df['is_fraud'].to_pandas().values.astype("float32")
             
             log.info(f"Loaded {len(df):,} records on GPU (Test set moved to CPU) in {time.time()-start:.2f}s")
             return X_train, y_train, X_test, y_test, available_feats
