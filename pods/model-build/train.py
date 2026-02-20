@@ -411,6 +411,21 @@ class ModelTrainer:
         model_file = version_dir / "xgboost.json"
         model.save_model(str(model_file))
         
+        # ✅ FIX: Strip 'iteration_indptr' from JSON (Incompatible with Triton 23.10 FIL/Treelite)
+        try:
+            with open(model_file, 'r') as f:
+                model_json = json.load(f)
+            
+            # This key is introduced in XGBoost 2.0+ and crashes older Treelite parsers
+            if "learner" in model_json and "gradient_booster" in model_json["learner"]:
+                model_json["learner"]["gradient_booster"]["model"].pop("iteration_indptr", None)
+                
+            with open(model_file, 'w') as f:
+                json.dump(model_json, f)
+            log(f"Cleaned XGBoost JSON for Triton compatibility (Stripped iteration_indptr)")
+        except Exception as e:
+            log(f"Warning: Failed to clean XGBoost JSON: {e}")
+            
         # Save feature names
         with open(model_repo_dir / "feature_names.json", "w") as f:
             json.dump(feature_names, f)
