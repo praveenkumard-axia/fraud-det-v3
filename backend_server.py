@@ -65,8 +65,8 @@ async def add_performance_headers(request, call_next):
     response.headers["X-Response-Time"] = f"{duration_ms:.2f}ms"
     
     # Log slow requests
-    if duration_ms > 100:
-        print(f"⚠️  SLOW API: {request.url.path} took {duration_ms:.0f}ms")
+    # if duration_ms > 100:
+    #     print(f"⚠️  SLOW API: {request.url.path} took {duration_ms:.0f}ms")
     # elif duration_ms < 10:
     #     print(f"⚡ FAST API: {request.url.path} took {duration_ms:.1f}ms")
     
@@ -402,7 +402,7 @@ def run_pod_async(pod_name: str, script_path: str):
                 
                 line = line.strip()
                 # Print to console for visibility
-                print(f"[{pod_name}] {line}")
+                # print(f"[{pod_name}] {line}")
                 
                 # Parse telemetry
                 telemetry = parse_telemetry_line(line)
@@ -438,7 +438,7 @@ def run_pod_async(pod_name: str, script_path: str):
 async def _tail_pod_logs(pod_name: str):
     """Tail logs for a single K8s pod and parse telemetry."""
     from k8s_scale import NAMESPACE
-    print(f"Started tailing logs for K8s pod: {pod_name}")
+    # print(f"Started tailing logs for K8s pod: {pod_name}")
     
     try:
         process = await asyncio.create_subprocess_exec(
@@ -467,7 +467,7 @@ async def _tail_pod_logs(pod_name: str):
     except Exception as e:
         print(f"Error tailing logs for {pod_name}: {e}")
     finally:
-        print(f"Stopped tailing logs for K8s pod: {pod_name}")
+        pass # print(f"Stopped tailing logs for K8s pod: {pod_name}")
 
 
 async def _k8s_telemetry_loop():
@@ -1807,5 +1807,5 @@ if __name__ == "__main__":
         app,
         host="0.0.0.0",
         port=8000,
-        log_level="info"
+        log_level="warning"
     )
