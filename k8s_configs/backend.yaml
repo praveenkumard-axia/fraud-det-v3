@@ -37,6 +37,8 @@ spec:
               value: "http://10.23.181.153:9090"
             - name: CONFIG_MODE
               value: "dual"
+            - name: FLASHBLADE_PATH
+              value: "/mnt/cpu-fb"
             - name: CPU_VOLUME_PATH
               value: "/mnt/cpu-fb"
             - name: GPU_VOLUME_PATH

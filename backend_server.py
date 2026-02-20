@@ -12,6 +12,7 @@ import asyncio
 import subprocess
 import threading
 import re
+from contextlib import asynccontextmanager
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, Optional, List
@@ -36,8 +37,17 @@ from config_contract import (
 BASE_DIR = Path(__file__).parent
 PODS_DIR = BASE_DIR / "pods"
 
-# FastAPI App
-app = FastAPI(title="Fraud Detection Dashboard Backend v4")
+# FastAPI App with Lifespan
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """MODERNIZED: Handle startup and shutdown events."""
+    # Startup: Start metrics poller and telemetry loops
+    asyncio.create_task(_metrics_poll_loop())
+    asyncio.create_task(_k8s_telemetry_loop())
+    yield
+    # Shutdown: Clean up if needed
+
+app = FastAPI(title="Fraud Detection Dashboard Backend v4", lifespan=lifespan)
 
 # Enable CORS
 app.add_middleware(
@@ -1596,11 +1606,7 @@ async def _metrics_poll_loop():
         await asyncio.sleep(1)
 
 
-@app.on_event("startup")
-async def start_metrics_poller():
-    """Start the 1s metrics collector loop."""
-    asyncio.create_task(_metrics_poll_loop())
-    asyncio.create_task(_k8s_telemetry_loop())
+
 
 
 @app.websocket("/data/dashboard")

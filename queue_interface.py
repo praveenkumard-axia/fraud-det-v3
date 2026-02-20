@@ -396,15 +396,23 @@ def get_queue_service() -> QueueInterface:
     """Factory function to get queue service instance"""
     from config_contract import StoragePaths, get_env, EnvironmentVariables
     
-    # Always use FlashBlade queue (with local fallback)
-    flashblade_path = get_env(EnvironmentVariables.FLASHBLADE_PATH, "/mnt/flashblade")
+    # Priority 1: Explicit FLASHBLADE_PATH
+    flashblade_path = os.getenv(EnvironmentVariables.FLASHBLADE_PATH)
     
-    # If FlashBlade not mounted, use local path
+    # Priority 2: Fallback to CPU_VOLUME_PATH (common for dual-mount management pods)
+    if not flashblade_path:
+        flashblade_path = os.getenv(EnvironmentVariables.CPU_VOLUME_PATH)
+        
+    # Priority 3: Hardcoded default
+    if not flashblade_path:
+        flashblade_path = EnvironmentVariables.DEFAULTS.get(EnvironmentVariables.FLASHBLADE_PATH, "/mnt/flashblade")
+    
+    # Validation and local fallback
     if not Path(flashblade_path).exists():
         from pathlib import Path as P
         local_base = P(__file__).parent / "run_queue_data"
         local_base.mkdir(parents=True, exist_ok=True)
+        print(f"FlashBlade not mounted at {flashblade_path}, using local queue: {local_base}")
         flashblade_path = str(local_base)
-        print(f"FlashBlade not mounted, using local queue: {flashblade_path}")
     
     return FlashBladeQueue(base_path=flashblade_path)

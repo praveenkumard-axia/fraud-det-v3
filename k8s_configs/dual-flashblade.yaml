@@ -262,7 +262,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: FLASHBLADE_PATH
-              value: "/mnt/gpu-fb"
+              value: "/mnt/cpu-fb"
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
@@ -387,7 +387,7 @@ spec:
               name: metrics
           env:
             - name: FLASHBLADE_PATH
-              value: "/mnt/gpu-fb"
+              value: "/mnt/cpu-fb"
             - name: QUEUE_TYPE
               value: "flashblade"
             - name: MODEL_REPOSITORY
