@@ -2309,7 +2309,7 @@
     }
 
     // Backend: same host as page or override (e.g. http://localhost:30880)
-    const BACKEND_URL = window.DASHBOARD_BACKEND_URL || (location.port === '30880' ? '' : 'http://10.23.181.153:30880');
+    const BACKEND_URL = window.DASHBOARD_BACKEND_URL || (location.port === '30880' ? '' : `http://${location.hostname}:30880`);
     const API = (path) => (BACKEND_URL || '') + path;
     function wsUrl() {
       if (BACKEND_URL) {
