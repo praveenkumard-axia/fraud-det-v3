@@ -229,6 +229,7 @@ duration = int(sys.argv[4])
 pools_file = sys.argv[5]
 fraud_rate = float(sys.argv[6])
 secondary_dir = Path(sys.argv[7]) if len(sys.argv) > 7 and sys.argv[7] != 'None' else None
+max_rows = int(sys.argv[8]) if len(sys.argv) > 8 else 0
 
 # Load pools and init RNG
 with open(pools_file, 'rb') as f:
@@ -271,6 +272,8 @@ try:
     is_continuous = (duration == 0)
     
     while is_continuous or (time.time() - start) < duration:
+        if max_rows > 0 and (file_count * chunk_size) >= max_rows:
+            break
         data = generate_chunk(pools, chunk_size, rng, fraud_rate, base_time)
         table = pa.Table.from_pydict(data, schema=schema)
         filename = f"worker_{worker_id:03d}_{file_count:05d}.parquet"
@@ -305,6 +308,10 @@ def main():
     num_workers = int(os.getenv('NUM_WORKERS', '4'))
     chunk_size = int(os.getenv('CHUNK_SIZE', '50000'))
     fraud_rate = float(os.getenv('FRAUD_RATE', '0.02'))
+    target_rows = int(os.getenv('TARGET_ROWS', '0'))
+    
+    # Divide rows among workers
+    max_rows_per_worker = (target_rows // num_workers) if target_rows > 0 else 0
     
     # NEW: Continuous mode configuration
     continuous_mode = os.getenv('CONTINUOUS_MODE', 'true').lower() == 'true'
@@ -350,7 +357,8 @@ def main():
         p = subprocess.Popen(
             [sys.executable, '-c', WORKER_SCRIPT, 
              str(i), str(run_path), str(chunk_size), str(duration), 
-             str(pools_file), str(fraud_rate), str(output_dir_secondary / run_path.name if output_dir_secondary else None)],
+             str(pools_file), str(fraud_rate), str(output_dir_secondary / run_path.name if output_dir_secondary else None),
+             str(max_rows_per_worker)],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
         )
         processes.append(p)

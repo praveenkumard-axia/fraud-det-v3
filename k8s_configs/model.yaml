@@ -24,8 +24,8 @@ spec:
           set -e
           echo "Starting Pipeline Step 1: Data Generation (1M records target)..."
           export CONTINUOUS_MODE=false
-          export DURATION_SECONDS=60
-          export NUM_WORKERS=8
+          export TARGET_ROWS=1000000
+          export NUM_WORKERS=4
           export CHUNK_SIZE=50000
           python3 pods/data-gather/gather.py
 
