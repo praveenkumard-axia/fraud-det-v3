@@ -155,11 +155,11 @@ spec:
               mountPath: /mnt/gpu-fb
           resources:
             requests:
-              cpu: "2000m"
-              memory: "6Gi"
-              ephemeral-storage: "2Gi"
+              cpu: "1000m"
+              memory: "8Gi"
+              ephemeral-storage: "1Gi"
             limits:
-              cpu: "4000m"
+              cpu: "2000m"
               memory: "16Gi"
               ephemeral-storage: "2Gi"
       volumes:
@@ -222,11 +222,11 @@ spec:
             requests:
               cpu: "4000m"
               memory: "16Gi"
-              ephemeral-storage: "4Gi"
+              ephemeral-storage: "1Gi"
             limits:
               cpu: "4000m"
               memory: "16Gi"
-              ephemeral-storage: "4Gi"
+              ephemeral-storage: "2Gi"
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
@@ -254,10 +254,10 @@ spec:
         tier: "preprocessing"
     spec:
       tolerations:
-      - key: dedicated
-        operator: Equal
-        value: gpu
-        effect: NoSchedule
+        - key: dedicated
+          operator: Equal
+          value: gpu
+          effect: NoSchedule
       containers:
         - name: preprocessing-gpu
           image: pduraiswamy16722/fraud-det-v3-data-prep:gpu
@@ -291,12 +291,12 @@ spec:
               cpu: "2000m"
               memory: "16Gi"
               nvidia.com/gpu: "1"
-              ephemeral-storage: "4Gi"
+              ephemeral-storage: "1Gi"
             limits:
               cpu: "2000m"
               memory: "16Gi"
               nvidia.com/gpu: "1"
-              ephemeral-storage: "4Gi"
+              ephemeral-storage: "2Gi"
       volumes:
         - name: gpu-fb
           persistentVolumeClaim:
@@ -357,11 +357,11 @@ spec:
             requests:
               cpu: "4000m"
               memory: "16Gi"
-              ephemeral-storage: "4Gi"
+              ephemeral-storage: "1Gi"
             limits:
               cpu: "4000m"
               memory: "16Gi"
-              ephemeral-storage: "4Gi"
+              ephemeral-storage: "2Gi"
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
@@ -389,10 +389,10 @@ spec:
         tier: "inference"
     spec:
       tolerations:
-      - key: dedicated
-        operator: Equal
-        value: gpu
-        effect: NoSchedule
+        - key: dedicated
+          operator: Equal
+          value: gpu
+          effect: NoSchedule
       containers:
         - name: inference-gpu
           image: pduraiswamy16722/fraud-det-v3-inference:latest
@@ -431,12 +431,12 @@ spec:
               cpu: "2000m"
               memory: "16Gi"
               nvidia.com/gpu: "1"
-              ephemeral-storage: "4Gi"
+              ephemeral-storage: "1Gi"
             limits:
               cpu: "2000m"
               memory: "16Gi"
               nvidia.com/gpu: "1"
-              ephemeral-storage: "4Gi"
+              ephemeral-storage: "2Gi"
       volumes:
         - name: gpu-fb
           persistentVolumeClaim:

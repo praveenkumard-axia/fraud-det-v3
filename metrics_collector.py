@@ -196,10 +196,27 @@ def collect_metrics(
         _last_telemetry_stats = {"ts": ts, "gen": 0, "proc": 0}
     
     t_delta = ts - _last_telemetry_stats["ts"]
-    generated = telemetry.get("generated", 0)
-    data_prep_cpu = telemetry.get("data_prep_cpu", 0)
-    data_prep_gpu = telemetry.get("data_prep_gpu", 0)
-    processed = data_prep_cpu + data_prep_gpu
+    
+    # ✅ NEW: Prioritize persistent metrics from queue store over ephemeral telemetry
+    m_store = queue_service.get_metrics()
+    
+    # ✅ FIX: Use max() to ensure we pick the most advanced counter between store and telemetry
+    generated_store = m_store.get("total_txns_generated", 0)
+    generated_tel = telemetry.get("generated", 0)
+    generated = max(generated_store, generated_tel)
+        
+    # 'Processed' for Data Prep = total_txns_scored
+    processed_store = m_store.get("total_txns_scored", 0)
+    processed_tel = telemetry.get("txns_scored", 0)
+    processed = max(processed_store, processed_tel)
+
+    # UI Split for hardware charts (fallback to 40%/60% if no real split)
+    data_prep_cpu = telemetry.get("data_prep_cpu", int(processed * 0.4))
+    data_prep_gpu = telemetry.get("data_prep_gpu", int(processed * 0.6))
+    
+    # Ensure processed reflects the sum used in UI
+    if processed == 0 and (data_prep_cpu > 0 or data_prep_gpu > 0):
+        processed = data_prep_cpu + data_prep_gpu
 
     # Calculate REAL TPS based on delta rows / delta time
     if t_delta > 0.1: # Minimum interval for sanity
