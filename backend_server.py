@@ -832,7 +832,6 @@ kubectl run exhaustive-cleanup --image=busybox --restart=Never -n fraud-det-v3 -
                             if item.is_file(): item.unlink()
                             elif item.is_dir(): shutil.rmtree(item)
                         print(f"✓ Cleared {path_type} in {target_dir}")
-            print("✓ Trained models preserved (not wiped)")
         except Exception as e:
             print(f"Warning during local data cleanup: {e}")
         
