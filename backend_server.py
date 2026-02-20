@@ -222,9 +222,9 @@ metrics_cache = OptimizedMetricsCache(ttl_seconds=1.0)
 
 
 # Serve static files (dashboard HTML)
-@app.get("/dashboard-v4-preview.html")
+@app.get("/dashboard")
 async def serve_dashboard():
-    return FileResponse(BASE_DIR / "dashboard-v4-preview.html", media_type="text/html")
+    return FileResponse(BASE_DIR / "dashboard.html", media_type="text/html")
 
 
 # ==================== Data Models ====================
