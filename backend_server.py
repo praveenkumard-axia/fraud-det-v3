@@ -42,8 +42,34 @@ PODS_DIR = BASE_DIR / "pods"
 async def lifespan(app: FastAPI):
     """MODERNIZED: Handle startup and shutdown events."""
     # Startup: Start metrics poller and telemetry loops
-    asyncio.create_task(_metrics_poll_loop())
+    # Initialize directory for metrics JSON
+    METRICS_JSON_PATH.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Pre-initialize metrics JSON with idle state to prevent 404s
+    if not METRICS_JSON_PATH.exists():
+        idle_data = {
+            "cpu": [], "gpu": [], "fb": [], "fb_cpu": [], "fb_gpu": [],
+            "is_running": False, "timestamp": time.time(),
+            "kpis": {"1_fraud_exposure_identified_usd": 0, "2_transactions_analyzed": 0, "3_high_risk_flagged": 0},
+            "business": {
+                "no_of_generated": 0, "no_of_processed": 0, "no_fraud": 0,
+                "pods": {
+                    "generation": {"no_of_generated": 0, "stream_speed": 0},
+                    "prep": {"no_of_transformed": 0, "prep_velocity": 0},
+                    "model_train": {"samples_trained": 0, "status": "Idle"},
+                    "inference": {"fraud": 0, "non_fraud": 0, "percent_score": 0}
+                }
+            }
+        }
+        try:
+            with open(METRICS_JSON_PATH, "w") as f:
+                json.dump(idle_data, f, indent=2)
+            print(f"📊 Initialized dashboard metrics at {METRICS_JSON_PATH}")
+        except Exception as e:
+            print(f"⚠️ Failed to initialize metrics JSON: {e}")
+
     asyncio.create_task(_k8s_telemetry_loop())
+    asyncio.create_task(_k8s_metrics_loop())
     yield
     # Shutdown: Clean up if needed
 
@@ -299,8 +325,8 @@ class PipelineState:
     
     def update_telemetry(self, stage: str, status: str, rows: int, throughput: int, 
                          elapsed: float, cpu_percent: float, ram_percent: float,
-                         fraud_blocked: Optional[int] = None):
-        """Update telemetry from pod output"""
+                         fraud_blocked: Optional[int] = None, **kwargs):
+        """Update telemetry from pod output with support for extra metrics"""
         with self.lock:
             self.telemetry["current_stage"] = stage
             self.telemetry["current_status"] = status
@@ -308,34 +334,50 @@ class PipelineState:
             self.telemetry["cpu_percent"] = cpu_percent
             self.telemetry["ram_percent"] = ram_percent
             
+            # Update extra metrics (e.g. tps_cpu, tps_gpu, util, etc.)
+            for k, v in kwargs.items():
+                self.telemetry[k] = v
+
             # Map stage to appropriate counter
             if stage == "Ingest":
                 self.telemetry["generated"] = max(self.telemetry.get("generated", 0), rows)
                 self.telemetry["throughput_cpu"] = throughput  # Ingest is usually CPU
             elif stage == "Data Prep":
+                # Detail for hardware charts
+                self.telemetry["tps_cpu"] = kwargs.get("cpu_tps", throughput if not kwargs.get("gpu_mode") else throughput * 0.1)
+                self.telemetry["tps_gpu"] = kwargs.get("gpu_tps", throughput if kwargs.get("gpu_mode") else 0)
+                self.telemetry["util_cpu"] = kwargs.get("cpu_util", cpu_percent)
+                self.telemetry["util_gpu"] = kwargs.get("gpu_util", 0)
+                
                 self.telemetry["data_prep_cpu"] = int(rows * 0.4)
                 self.telemetry["data_prep_gpu"] = int(rows * 0.6)
                 self.telemetry["txns_scored"] = rows
-                self.telemetry["throughput_cpu"] = throughput # Data prep is CPU-bound here
+                self.telemetry["throughput_cpu"] = throughput
                 # Data Prep processes generated data — generated >= prep rows
                 self.telemetry["generated"] = max(self.telemetry.get("generated", 0), rows)
             elif stage == "Model Train":
-                self.telemetry["txns_scored"] = rows
+                self.telemetry["samples_trained"] = rows
                 # Model trained on generated data
                 self.telemetry["generated"] = max(self.telemetry.get("generated", 0), rows)
             elif stage == "Inference":
+                # Detail for hardware charts
+                self.telemetry["tps_cpu"] = kwargs.get("cpu_tps", int(throughput * 0.3))
+                self.telemetry["tps_gpu"] = kwargs.get("gpu_tps", int(throughput * 0.7))
+                self.telemetry["util_cpu"] = kwargs.get("cpu_util", cpu_percent)
+                self.telemetry["util_gpu"] = kwargs.get("gpu_util", 0)
+
                 self.telemetry["inference_cpu"] = int(rows * 0.3)
                 self.telemetry["inference_gpu"] = int(rows * 0.7)
                 self.telemetry["txns_scored"] = rows
-                self.telemetry["throughput_gpu"] = throughput # Inference is typically GPU/Triton
+                self.telemetry["throughput_gpu"] = throughput
                 # Inference processes generated data — generated >= inference rows
                 self.telemetry["generated"] = max(self.telemetry.get("generated", 0), rows)
             
             # Calculate or use REAL fraud metrics
             if fraud_blocked is not None:
                 self.telemetry["fraud_blocked"] = fraud_blocked
-            else:
-                # Fallback to 0.5% fraud rate if not provided (e.g. from data-prep stage)
+            elif self.telemetry.get("txns_scored", 0) > 0:
+                # Fallback to 0.5% fraud rate if not provided 
                 fraud_rate = 0.005
                 self.telemetry["fraud_blocked"] = int(self.telemetry["txns_scored"] * fraud_rate)
             

@@ -157,11 +157,11 @@ spec:
             requests:
               cpu: "2000m"
               memory: "6Gi"
-              ephemeral-storage: "4Gi"
+              ephemeral-storage: "2Gi"
             limits:
               cpu: "4000m"
               memory: "16Gi"
-              ephemeral-storage: "4Gi"
+              ephemeral-storage: "2Gi"
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
@@ -277,6 +277,8 @@ spec:
               value: "/mnt/gpu-fb/raw"
             - name: OUTPUT_PATH
               value: "/mnt/gpu-fb/features"
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: "all"
             - name: PYTHONUNBUFFERED
               value: "1"
           volumeMounts:
@@ -415,6 +417,8 @@ spec:
               value: "/mnt/gpu-fb/models"
             - name: OUTPUT_PATH
               value: "/mnt/gpu-fb/results"
+            - name: NVIDIA_VISIBLE_DEVICES
+              value: "all"
             - name: PYTHONUNBUFFERED
               value: "1"
           volumeMounts:

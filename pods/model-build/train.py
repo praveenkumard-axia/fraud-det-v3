@@ -411,7 +411,6 @@ class ModelTrainer:
         model_file = version_dir / "xgboost.json"
         model.save_model(str(model_file))
         
-        # ✅ FIX: Strip 'iteration_indptr' from JSON (Incompatible with Triton 23.10 FIL/Treelite)
         try:
             with open(model_file, 'r') as f:
                 model_json = json.load(f)

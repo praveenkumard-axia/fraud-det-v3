@@ -392,6 +392,7 @@ class DataPrepService:
                 
                 # Update global metrics for dashboard fallback
                 self.queue_service.increment_metric("total_txns_scored", len(messages))
+                self.queue_service.increment_metric("no_of_transformed", len(messages))
                 
             except Exception as e:
                 log(f"Error in continuous processing: {e}")
