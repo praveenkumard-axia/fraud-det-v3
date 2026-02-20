@@ -27,6 +27,7 @@ spec:
           export TARGET_ROWS=1000000
           export NUM_WORKERS=4
           export CHUNK_SIZE=50000
+          export OUTPUT_PATH="/mnt/gpu-fb/raw"
           python3 pods/data-gather/gather.py
 
           echo "Starting Pipeline Step 2: Data Preprocessing (GPU Optimized)..."
