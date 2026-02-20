@@ -11,8 +11,8 @@ echo "=========================================================="
 DOCKER_USER="pduraiswamy16722"
 
 
-docker build -t $DOCKER_USER/fraud-det-v3-dockerfile.backend:latest -f Dockerfile.backend .
-docker push $DOCKER_USER/fraud-det-v3-dockerfile.backend:latest
+docker build -t $DOCKER_USER/fraud-det-v3-backend:latest -f Dockerfile.backend .
+docker push $DOCKER_USER/fraud-det-v3-backend:latest
 
 docker build -t $DOCKER_USER/fraud-det-v3-data-gather:latest -f pods/data-gather/Dockerfile .
 docker push $DOCKER_USER/fraud-det-v3-data-gather:latest

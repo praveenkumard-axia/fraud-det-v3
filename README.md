@@ -45,14 +45,15 @@ This project implements a financial fraud detection pipeline as a 5-pod containe
 
 ```mermaid
 graph TD
-    subgraph "Kubernetes Cluster (fraud-det-v3)"
-        DG[Data Gather Pod]
+    subgraph "Kubernetes Clusters"
+        direction LR
+        DG[Data Gather]
         PC[Preprocessing CPU]
         PG[Preprocessing GPU]
         IC[Inference CPU]
         IG[Inference GPU]
-        OS[One-Shot Pipeline Job]
         BE[Backend Server]
+        OS[One-Shot Pipeline]
     end
 
     subgraph "FlashBlade Storage"
@@ -280,12 +281,16 @@ make build
 kubectl apply -f k8s_configs/prometheus-rbac.yaml
 ```
 
-### Step 2 — Deploy Storage and Pods
+### Step 2 — Deploy Storage, Pods and Backend
 
-The backend server auto-applies `dual-flashblade.yaml` on startup. To deploy manually:
+The backend server auto-applies `dual-flashblade.yaml` on startup. To deploy the entire management and processing stack manually:
 
 ```bash
+# 1. Deploy Processing Pipeline
 kubectl apply -f k8s_configs/dual-flashblade.yaml
+
+# 2. Deploy Backend Dashboard (Pod mode)
+kubectl apply -f k8s_configs/backend.yaml
 ```
 
 This manifest provisions:
@@ -321,17 +326,26 @@ All pods should reach `Running` state. GPU pods require the NVIDIA device plugin
 
 ## Running the Backend
 
-The backend server exposes the REST API used by the dashboard to control pods and fetch metrics.
+The backend server can be run as a standalone process for development or as a Kubernetes pod for production.
 
+### Local Execution (Dev)
 ```bash
 python backend_server.py
 ```
 
-Access the live dashboard at:
+### Kubernetes Execution (Prod)
+```bash
+kubectl apply -f k8s_configs/backend.yaml
+```
 
-```
-http://localhost:8000/dashboard-v4-preview.html
-```
+Access the live dashboard at:
+- **Local**: `http://localhost:8000/dashboard-v4-preview.html`
+- **K8s**: `http://<node-ip>:30880/dashboard-v4-preview.html`
+
+How to get node ip
+`
+ kubectl get svc -A
+`
 
 The backend will automatically apply `dual-flashblade.yaml` if the pods are not already running.
 
@@ -346,7 +360,7 @@ The backend will automatically apply `dual-flashblade.yaml` if the pods are not 
 
 ## Security & RBAC
 
-The system uses three distinct Kubernetes service accounts with least-privilege roles:
+The system uses three distinct Kubernetes service accounts with least-privilege roles. The backend pod must be deployed with the `fraud-backend` account to enable pipeline scaling.
 
 | Account | Role | Permissions |
 |---|---|---|
