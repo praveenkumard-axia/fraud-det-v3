@@ -190,7 +190,7 @@ def collect_metrics(
         cpu_util_pct = (cpu_util_millicores / (total_cores_limit * 1000.0)) * 100.0 if cpu_util_millicores > 0 else 0
 
         
-    global _last_telemetry_stats
+    global _last_telemetry_stats, _tps_ema, _high_risk_signals_cache
     if "_last_telemetry_stats" not in globals():
         # --- Smoothing Global State ---
         _last_telemetry_stats = {"ts": time.time(), "gen": 0, "proc": 0, "fraud": 0, "fraud_amt": 0.0}
@@ -220,7 +220,6 @@ def collect_metrics(
         processed = data_prep_cpu + data_prep_gpu
 
     # Calculate REAL TPS based on delta rows / delta time
-    global _last_telemetry_stats, _tps_ema, _high_risk_signals_cache
     
     if t_delta > 0.1: # Minimum interval for sanity
         calc_gen_tps = (generated - _last_telemetry_stats["gen"]) / t_delta
@@ -236,7 +235,6 @@ def collect_metrics(
         fraud_per_min = (fraud_delta / t_delta) * 60 if t_delta > 0 else 0
         
         # Capture recent high-risk signals (simulated if not real individual txns)
-        # Fix: Ensure simulated signals sum up exactly to the real fraud amount delta
         if fraud_delta > 0 and fraud_amt_delta > 0.01:
             cats = ["shopping_net", "grocery_pos", "misc_net", "gas_transport", "food_dining", "entertainment"]
             states = ["TX", "CA", "NY", "FL", "IL", "PA", "OH", "GA"]
@@ -424,7 +422,8 @@ def collect_metrics(
             "allocation": res_alloc,
             "node": {
                 "cpu_percent": node_cpu_pct or cpu_util_pct,
-                "ram_percent": node_ram_pct or (prom.get("total_pod_mem_mib", 0) / (96 * 1024) * 100) # Approx 96GB across nodes
+                "ram_percent": node_ram_pct or (prom.get("total_pod_mem_mib", 0) / (96 * 1024) * 100), # Approx 96GB across nodes
+                "gpu_percent": prom.get("gpu_util_pct", 0)
             }
         },
         "prometheus": prom,

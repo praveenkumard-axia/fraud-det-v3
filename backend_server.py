@@ -273,11 +273,13 @@ class PipelineState:
             "throughput_gpu": 0,
             "cpu_percent": 0,
             "ram_percent": 0,
+            "gpu_percent": 0,
             "fraud_blocked": 0,
             "txns_scored": 0,
             # Dual Volume FlashBlade Metrics
             "fb_cpu_throughput": 0,
             "fb_gpu_throughput": 0,
+            "high_risk_signals": []
         }
         
         # Configuration
@@ -668,8 +670,8 @@ def get_dashboard_data():
             "backlog": backlog
         },
         "utilization": {
-            "gpu": min(85, tel["cpu_percent"] + 10),  # Simulated GPU higher
-            "cpu": min(78, int(tel["cpu_percent"])),
+            "gpu": min(100, int(tel.get("gpu_percent", 0))),
+            "cpu": min(100, int(tel.get("cpu_percent", 0))),
             "flashblade": flashblade_util
         },
         "throughput": {
@@ -1428,20 +1430,48 @@ async def get_business_risk():
             "fraud_amount": round(amt, 2), "count": int(count)
         })
 
-    # 3. Category Risk
+    # 4. Recent Alerts (Real signals from telemetry)
+    recent_signals = state.telemetry.get("high_risk_signals", [])
+    recent_alerts = []
+    
+    for s in recent_signals:
+        recent_alerts.append({
+            "risk_score": s.get("score", 95.0),
+            "merchant": f"unbg-{s.get('id')}",
+            "category": s.get("category", "shopping_net"),
+            "cc_num_masked": "**** **** **** " + s.get("id", "1234")[-4:],
+            "state": s.get("state", "TX"),
+            "cardholder": "Simulated User",
+            "amount": s.get("amount", 0.0),
+            "seconds_ago": int(time.time() - time.mktime(time.strptime(s.get("timestamp"), "%H:%M:%S"))) if ":" in s.get("timestamp", "") else 0
+        })
+
+    # If empty, use old cached alerts as fallback
+    if not recent_alerts:
+        recent_alerts = cached.get("recent_high_risk_transactions", [])[:10]
+
+    # 3. Category Risk (Update with real signal distribution if available)
     risk_signals_by_category = []
-    for key, val in cached.items():
-        if key.startswith("category_") and key.endswith("_amount"):
-            cat_name = key[len("category_"):-len("_amount")]
-            risk_signals_by_category.append({
-                "category": cat_name,
-                "amount": round(val, 2)
-            })
+    if recent_signals:
+        cat_map = {}
+        for s in recent_signals:
+            c = s.get("category", "other")
+            cat_map[c] = cat_map.get(c, 0.0) + s.get("amount", 0.0)
+        for cat, amt in cat_map.items():
+            risk_signals_by_category.append({"category": cat, "amount": round(amt, 2)})
+        risk_signals_by_category.sort(key=lambda x: x["amount"], reverse=True)
+
+    if not risk_signals_by_category:
+        for key, val in cached.items():
+            if key.startswith("category_") and key.endswith("_amount"):
+                cat_name = key[len("category_"):-len("_amount")]
+                risk_signals_by_category.append({
+                    "category": cat_name,
+                    "amount": round(val, 2)
+                })
+        risk_signals_by_category.sort(key=lambda x: x["amount"], reverse=True)
     
-    # Sort by amount
-    risk_signals_by_category = sorted(risk_signals_by_category, key=lambda x: x["amount"], reverse=True)
-    
-    # Demo Fallback if empty but we have fraud
+    # Final Demo Fallback
     if not risk_signals_by_category and data["fraud_amt"] > 0:
         demo_cats = [
             ("shopping_net", 0.35), ("grocery_pos", 0.22), ("misc_net", 0.18),
@@ -1456,7 +1486,7 @@ async def get_business_risk():
     return {
         "risk_score_distribution": risk_distribution,
         "state_risk": state_risk,
-        "recent_alerts": cached.get("recent_high_risk_transactions", [])[:10],
+        "recent_alerts": recent_alerts,
         "risk_signals_by_category": risk_signals_by_category
     }
 
@@ -1648,6 +1678,13 @@ async def _metrics_poll_loop():
                     state.telemetry["throughput_cpu"] = raw_metrics.get("cpu", [{}])[0].get("throughput", 0)
                     state.telemetry["throughput_gpu"] = raw_metrics.get("gpu", [{}])[0].get("throughput", 0)
                     state.telemetry["throughput"] = state.telemetry["throughput_cpu"] + state.telemetry["throughput_gpu"]
+                    
+                    # Sync GPU/CPU percent from node metrics
+                    infra = raw_metrics.get("infra", {})
+                    node = infra.get("node", {})
+                    if "cpu_percent" in node: state.telemetry["cpu_percent"] = node["cpu_percent"]
+                    if "gpu_percent" in node: state.telemetry["gpu_percent"] = node["gpu_percent"]
+
                     # Capture signals
                     if "high_risk_signals" in raw_metrics:
                         state.telemetry["high_risk_signals"] = raw_metrics["high_risk_signals"]
