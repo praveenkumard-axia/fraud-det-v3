@@ -2678,8 +2678,10 @@
 
         if (el('tbl-cpu-util')) el('tbl-cpu-util').textContent = cpuU + '%';
         if (el('tbl-gpu-util')) el('tbl-gpu-util').textContent = gpuU + '%';
-        if (el('tbl-cpu2-util')) el('tbl-cpu2-util').textContent = cpuU + '%';
-        if (el('tbl-gpu2-util')) el('tbl-gpu2-util').textContent = gpuU + '%';
+
+        // Tech Tab Parity
+        if (el('tech-tbl-cpu-util')) el('tech-tbl-cpu-util').textContent = cpuU + '%';
+        if (el('tech-tbl-gpu-util')) el('tech-tbl-gpu-util').textContent = gpuU + '%';
 
         // Show real node CPU% and RAM% in machine metric labels
         if (el('mm-cpu')) el('mm-cpu').textContent = nodeCpuPct + '%';
@@ -2718,12 +2720,16 @@
         if (el('fb-util')) el('fb-util').textContent = fbU + '%';
         if (el('fb-util-bar')) el('fb-util-bar').style.width = fbU + '%';
 
+        // Parity for Tech Tab
+        if (el('tech-fb-read')) el('tech-fb-read').textContent = totalRead.toFixed(0) + ' MB/s';
+        if (el('tech-fb-write')) el('tech-fb-write').textContent = totalWrite.toFixed(0) + ' MB/s';
+        if (el('tech-fb-util')) el('tech-fb-util').textContent = fbU + '%';
+        if (el('tech-fb-util-bar')) el('tech-fb-util-bar').style.width = fbU + '%';
+
 
         // Detailed Tables - Storage
         if (el('tbl-fb-mbps')) el('tbl-fb-mbps').textContent = (totalRead * 0.3).toFixed(0) + ' MB/s';
-        if (el('tbl-fb2-mbps')) el('tbl-fb2-mbps').textContent = (totalRead * 0.7 + totalWrite).toFixed(0) + ' MB/s';
         if (el('tbl-fb-util')) el('tbl-fb-util').textContent = fbU + '%';
-        if (el('tbl-fb2-util')) el('tbl-fb2-util').textContent = fbU + '%';
 
 
       } catch (e) { }
@@ -2799,20 +2805,20 @@
           if (el('throughput-cpu-val')) el('throughput-cpu-val').innerHTML = fmtNum(cpuTPS) + ' <span style="font-size: 11px; color: var(--text-muted);">TPS</span>';
           if (el('throughput-gpu-val')) el('throughput-gpu-val').innerHTML = fmtNum(gpuTPS) + ' <span style="font-size: 11px; color: var(--text-muted);">TPS</span>';
 
-          // Tables
+          // Tables - Business / Global
           if (el('tbl-cpu-tps')) el('tbl-cpu-tps').textContent = fmtNum(cpuTPS);
           if (el('tbl-gpu-tps')) el('tbl-gpu-tps').textContent = fmtNum(gpuTPS);
-          if (el('tbl-cpu2-tps')) el('tbl-cpu2-tps').textContent = fmtNum(cpuTPS);
-          if (el('tbl-gpu-tps')) el('tbl-gpu-tps').textContent = fmtNum(gpuTPS);
-          if (el('tbl-cpu2-tps')) el('tbl-cpu2-tps').textContent = fmtNum(cpuTPS);
-          if (el('tbl-gpu2-tps')) el('tbl-gpu2-tps').textContent = fmtNum(gpuTPS);
+
+          // Tech Tab Parity
+          if (el('tech-tbl-cpu-tps')) el('tech-tbl-cpu-tps').textContent = fmtNum(cpuTPS);
+          if (el('tech-tbl-gpu-tps')) el('tech-tbl-gpu-tps').textContent = fmtNum(gpuTPS);
         } else {
           if (el('throughput-cpu-val')) el('throughput-cpu-val').innerHTML = '0 <span style="font-size: 11px; color: var(--text-muted);">TPS</span>';
           if (el('throughput-gpu-val')) el('throughput-gpu-val').innerHTML = '0 <span style="font-size: 11px; color: var(--text-muted);">TPS</span>';
           if (el('tbl-cpu-tps')) el('tbl-cpu-tps').textContent = '\u2014';
           if (el('tbl-gpu-tps')) el('tbl-gpu-tps').textContent = '\u2014';
-          if (el('tbl-cpu2-tps')) el('tbl-cpu2-tps').textContent = '\u2014';
-          if (el('tbl-gpu2-tps')) el('tbl-gpu2-tps').textContent = '\u2014';
+          if (el('tech-tbl-cpu-tps')) el('tech-tbl-cpu-tps').textContent = '\u2014';
+          if (el('tech-tbl-gpu-tps')) el('tech-tbl-gpu-tps').textContent = '\u2014';
         }
 
         // Update Combined Header
@@ -3260,16 +3266,13 @@
         data: {
           labels: hwTrendData.timestamps,
           datasets: [
-            // Prep (FlashBlade CPU storage)
             { label: 'Prep CPU (TPS)', data: hwTrendData.prepCpuTPS, borderColor: '#3b82f6', tension: 0.3, fill: false, borderWidth: 2 },
             { label: 'Prep GPU (TPS)', data: hwTrendData.prepGpuTPS, borderColor: '#8b5cf6', tension: 0.3, fill: false, borderWidth: 2 },
-            // { label: 'FlashBlade CPU (Read)', data: hwTrendData.prepFbRead, borderColor: '#60a5fa', tension: 0.3, borderDash: [4, 2], fill: false, borderWidth: 1.5 },
-            // { label: 'FlashBlade CPU (Write)', data: hwTrendData.prepFbWrite, borderColor: '#a78bfa', tension: 0.3, borderDash: [4, 2], fill: false, borderWidth: 1.5 },
             // Inf (FlashBlade GPU storage)
             { label: 'Inf CPU (TPS)', data: hwTrendData.infCpuTPS, borderColor: '#10b981', tension: 0.3, fill: false, borderWidth: 2 },
             { label: 'Inf GPU (TPS)', data: hwTrendData.infGpuTPS, borderColor: '#f59e0b', tension: 0.3, fill: false, borderWidth: 2 },
-            // { label: 'FlashBlade GPU (Read)', data: hwTrendData.infFbRead, borderColor: '#34d399', tension: 0.3, borderDash: [2, 2], fill: false, borderWidth: 1.5 },
-            // { label: 'FlashBlade GPU (Write)', data: hwTrendData.infFbWrite, borderColor: '#fbbf24', tension: 0.3, borderDash: [2, 2], fill: false, borderWidth: 1.5 }
+            // Combined FlashBlade Throughput (Sum of CPU + GPU Path)
+            { label: 'FlashBlade Total (MB/s)', data: [], borderColor: '#fe5000', tension: 0.3, borderDash: [5, 5], fill: false, borderWidth: 2 }
           ]
         },
         options: {
@@ -3296,12 +3299,10 @@
             // Prep
             { label: 'Prep CPU %', data: hwTrendData.prepCpuUtil, borderColor: '#3b82f6', tension: 0.3, fill: false, borderWidth: 2 },
             { label: 'Prep GPU %', data: hwTrendData.prepGpuUtil, borderColor: '#8b5cf6', tension: 0.3, fill: false, borderWidth: 2 },
-            { label: 'FlashBlade CPU %', data: hwTrendData.prepIoWait, borderColor: '#60a5fa', tension: 0.3, borderDash: [3, 3], fill: false, borderWidth: 1.5 },
             { label: 'Prep Mem %', data: hwTrendData.prepMem, borderColor: '#a78bfa', tension: 0.3, borderDash: [3, 3], fill: false, borderWidth: 1.5 },
             // Inf
             { label: 'Inf CPU %', data: hwTrendData.infCpuUtil, borderColor: '#10b981', tension: 0.3, fill: false, borderWidth: 2 },
             { label: 'Inf GPU %', data: hwTrendData.infGpuUtil, borderColor: '#f59e0b', tension: 0.3, fill: false, borderWidth: 2 },
-            { label: 'FlashBlade GPU %', data: hwTrendData.infIoWait, borderColor: '#34d399', tension: 0.3, borderDash: [3, 3], fill: false, borderWidth: 1.5 },
             { label: 'Inf Mem %', data: hwTrendData.infMem, borderColor: '#fbbf24', tension: 0.3, borderDash: [3, 3], fill: false, borderWidth: 1.5 }
           ]
         },
@@ -3352,24 +3353,21 @@
       hardwareThroughputChart.data.labels = hwTrendData.timestamps;
       hardwareThroughputChart.data.datasets[0].data = hwTrendData.prepCpuTPS;
       hardwareThroughputChart.data.datasets[1].data = hwTrendData.prepGpuTPS;
-      hardwareThroughputChart.data.datasets[2].data = hwTrendData.prepFbRead;
-      hardwareThroughputChart.data.datasets[3].data = hwTrendData.prepFbWrite;
-      hardwareThroughputChart.data.datasets[4].data = hwTrendData.infCpuTPS;
-      hardwareThroughputChart.data.datasets[5].data = hwTrendData.infGpuTPS;
-      hardwareThroughputChart.data.datasets[6].data = hwTrendData.infFbRead;
-      hardwareThroughputChart.data.datasets[7].data = hwTrendData.infFbWrite;
+      hardwareThroughputChart.data.datasets[2].data = hwTrendData.infCpuTPS;
+      hardwareThroughputChart.data.datasets[3].data = hwTrendData.infGpuTPS;
+      // Dataset 4 is the Total FlashBlade (MB/s) - sum of all storage activity
+      const fbTotalData = hwTrendData.prepFbRead.map((v, i) => (v || 0) + (hwTrendData.prepFbWrite[i] || 0) + (hwTrendData.infFbRead[i] || 0) + (hwTrendData.infFbWrite[i] || 0));
+      hardwareThroughputChart.data.datasets[4].data = fbTotalData;
       hardwareThroughputChart.update('none');
 
       // Update Util Chart
       hardwareUtilChart.data.labels = hwTrendData.timestamps;
       hardwareUtilChart.data.datasets[0].data = hwTrendData.prepCpuUtil;
       hardwareUtilChart.data.datasets[1].data = hwTrendData.prepGpuUtil;
-      hardwareUtilChart.data.datasets[2].data = hwTrendData.prepIoWait;
-      hardwareUtilChart.data.datasets[3].data = hwTrendData.prepMem;
-      hardwareUtilChart.data.datasets[4].data = hwTrendData.infCpuUtil;
-      hardwareUtilChart.data.datasets[5].data = hwTrendData.infGpuUtil;
-      hardwareUtilChart.data.datasets[6].data = hwTrendData.infIoWait;
-      hardwareUtilChart.data.datasets[7].data = hwTrendData.infMem;
+      hardwareUtilChart.data.datasets[2].data = hwTrendData.prepMem;
+      hardwareUtilChart.data.datasets[3].data = hwTrendData.infCpuUtil;
+      hardwareUtilChart.data.datasets[4].data = hwTrendData.infGpuUtil;
+      hardwareUtilChart.data.datasets[5].data = hwTrendData.infMem;
       hardwareUtilChart.update('none');
     }
 
