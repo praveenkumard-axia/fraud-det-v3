@@ -111,6 +111,10 @@ class ModelTrainer:
         self.min_samples_for_training = int(os.getenv('MIN_SAMPLES_FOR_TRAINING', '1000')) # Lowered significantly for first model
         self.backend_url = os.getenv('BACKEND_URL', 'http://localhost:8000')
         self.sample_limit = int(os.getenv('TRAIN_SAMPLE_LIMIT', '500000')) # Limit rows for stability
+        self.secondary_output_path = os.getenv('OUTPUT_PATH_SECONDARY')
+        if self.secondary_output_path:
+            self.secondary_output_path = Path(self.secondary_output_path)
+            self.secondary_output_path.mkdir(parents=True, exist_ok=True)
         
         # Debugging: Log actual paths being used
         log.info(f"ModelTrainer Input Path:  {self.input_path.absolute()}")
@@ -471,6 +475,18 @@ parameters [
             f.write(config)
             
         log.info(f"Model v{version} saved to {model_repo_dir}")
+        
+        # Copy to secondary path if defined
+        if self.secondary_output_path:
+            import shutil
+            try:
+                dest_dir = self.secondary_output_path / model_name
+                if dest_dir.exists():
+                    shutil.rmtree(dest_dir)
+                shutil.copytree(model_repo_dir, dest_dir)
+                log.info(f"Model mirrored to secondary path: {dest_dir}")
+            except Exception as e:
+                log.error(f"Failed to mirror model to secondary path: {e}")
         self.model_version = version
         return version
 
