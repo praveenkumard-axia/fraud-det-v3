@@ -27,22 +27,23 @@ spec:
           export TARGET_ROWS=1000000
           export NUM_WORKERS=4
           export CHUNK_SIZE=50000
-          export OUTPUT_PATH="/mnt/gpu-fb/raw"
+          export OUTPUT_PATH="/mnt/cpu-fb/raw"
           python3 pods/data-gather/gather.py
 
-          echo "Starting Pipeline Step 2: Data Preprocessing (GPU Optimized)..."
-          export INPUT_PATH="/mnt/gpu-fb/raw"
-          export OUTPUT_PATH="/mnt/gpu-fb/features"
+          echo "Starting Pipeline Step 2: Data Preprocessing (CPU/Polars)..."
+          export FORCE_CPU=true
+          export INPUT_PATH="/mnt/cpu-fb/raw"
+          export OUTPUT_PATH="/mnt/cpu-fb/features"
           python3 pods/data-prep/prepare.py
 
-          echo "Starting Pipeline Step 3: Model Training (500k Sample Limit)..."
-          export TRAIN_SAMPLE_LIMIT=500000
-          export INPUT_PATH="/mnt/gpu-fb/features"
+          echo "Starting Pipeline Step 3: Model Training (CPU/XGBoost)..."
+          export FORCE_CPU=true
+          export TRAIN_SAMPLE_LIMIT=1000000
+          export INPUT_PATH="/mnt/cpu-fb/features"
           export OUTPUT_PATH="/mnt/cpu-fb/models"
-          export OUTPUT_PATH_SECONDARY="/mnt/gpu-fb/models"
           python3 pods/model-build/train.py
-          
-          echo "Pipeline Complete. Models stored in CPU and GPU volumes."
+
+          echo "Pipeline Complete. Model stored in /mnt/cpu-fb/models"
         env:
         - name: QUEUE_TYPE
           value: "flashblade"
