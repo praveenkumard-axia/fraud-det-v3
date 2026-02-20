@@ -1013,18 +1013,33 @@
       </div>
       <div class="divider"></div>
       <div class="kpi-item">
-        <span class="kpi-icon">📈</span>
+        <span class="kpi-icon">🔄</span>
         <div>
-          <div class="kpi-value" style="color: var(--orange);">94.2%</div>
-          <div class="kpi-label">Precision @ Threshold</div>
+          <div class="kpi-value" style="color: var(--purple);" id="nav-total-generated">0</div>
+          <div class="kpi-label">Total Transactions</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <!-- Generation Velocity Gauge in Top Bar -->
+      <div class="kpi-item" style="gap: 12px; align-items: center; padding-right: 10px;">
+        <div style="text-align: center;">
+          <div class="gauge-container" style="width: 80px; height: 40px; margin: 0;">
+            <div class="gauge-bg" style="width: 80px; height: 80px; border-width: 8px;"></div>
+            <div class="gauge-fill" id="gen-gauge-fill" style="width: 80px; height: 80px; border-width: 8px;"></div>
+            <div class="gauge-cover" style="width: 64px; height: 32px; left: 8px; background: var(--bg-card);">
+              <span class="gauge-value" id="gen-gauge-val" style="font-size: 14px;">0</span>
+            </div>
+          </div>
+          <div style="font-size: 8px; color: var(--text-muted); text-transform: uppercase; margin-top: -2px;">TPS
+            Velocity</div>
         </div>
       </div>
     </div>
-    <div class="compliance-badges">
+    <!-- <div class="compliance-badges">
       <div class="badge badge-green">✓ SLA: &lt;50ms</div>
       <div class="badge">🔒 PCI-DSS</div>
       <div class="badge">📋 SOX</div>
-    </div>
+    </div> -->
   </div>
 
   <!-- ═══════════════ HEADER ═══════════════ -->
@@ -1037,7 +1052,9 @@
       </div>
     </div>
     <div class="header-right">
-      <div class="chip">FlashBlade//S500</div>
+      <span class="chip" style="background: var(--purple-dim); color: var(--purple);" id="hw-backlog">Txns
+        Backlog:
+        0</span>
       <div class="chip">4× NVIDIA L40S</div>
       <div class="live-indicator" id="live-indicator">
         <div class="live-dot"></div>
@@ -1048,17 +1065,32 @@
   </div>
 
   <!-- ═══════════════ TAB BAR ═══════════════ -->
-  <div class="tab-bar">
-    <div class="tab active" onclick="switchTab('business')">
-      <span class="tab-icon">📊</span>Business Intelligence
+  <div class="tab-bar" style="display: flex; justify-content: space-between; align-items: center;">
+    <div style="display: flex;">
+      <div class="tab active" onclick="switchTab('business')">
+        <span class="tab-icon">📊</span>Business Intelligence
+      </div>
+      <div class="tab" onclick="switchTab('tech')">
+        <span class="tab-icon">⚙️</span>Technology & Infrastructure
+      </div>
+      <div class="tab" onclick="switchTab('hardware')">
+        <span class="tab-icon">📈</span>Hardware Analytics
+      </div>
     </div>
-    <div class="tab" onclick="switchTab('tech')">
-      <span class="tab-icon">⚙️</span>Technology & Infrastructure
-    </div>
-    <div class="tab" onclick="switchTab('hardware')">
-      <span class="tab-icon">📈</span>Hardware Analytics
+    <!-- Global Controls -->
+    <div class="btn-row" style="display: flex; gap: 6px; margin-right: 16px;">
+      <button class="btn btn-green" id="btn-start"
+        style="padding: 6px 16px; font-size: 12px; display: flex; align-items: center; gap: 4px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><span>▶</span>
+        Start</button>
+      <button class="btn btn-red" id="btn-stop"
+        style="padding: 6px 16px; font-size: 12px; display: flex; align-items: center; gap: 4px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><span>⏹</span>
+        Stop</button>
+      <button class="btn btn-amber" id="btn-reset"
+        style="padding: 6px 16px; font-size: 12px; display: flex; align-items: center; gap: 4px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"><span>↺</span>
+        Reset</button>
     </div>
   </div>
+
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!-- ═══════════════ BUSINESS TAB ════════════════════════ -->
@@ -1465,16 +1497,6 @@
         </div>
       </div>
 
-      <!-- Bottom -->
-      <div class="bottom-msg">
-        🛡️ Identified <span style="color: var(--green);">$247,892 in potential fraud</span> across
-        <span style="color: var(--text-primary);">6.6M transactions</span> at
-        <span style="color: var(--blue);">357K TPS</span> with
-        <span style="color: var(--purple);">12ms</span> decision latency —
-        FlashBlade at only <span style="color: var(--orange);">12%</span> utilization.
-        <span style="color: var(--orange);">Ready to scale 8× without re-architecting.</span>
-      </div>
-
     </div>
   </div>
 
@@ -1488,18 +1510,6 @@
         <!-- ── LEFT COLUMN ── -->
         <div class="col-8" style="display: flex; flex-direction: column; gap: 16px;">
 
-          <!-- Accelerometer / Generation Rate -->
-          <div class="card" style="text-align: center; flex-shrink: 0;">
-            <div class="card-title" style="margin-bottom: 5px;">Generation Velocity</div>
-            <div class="gauge-container">
-              <div class="gauge-bg"></div>
-              <div class="gauge-fill" id="gen-gauge-fill"></div>
-              <div class="gauge-cover">
-                <span class="gauge-value" id="gen-gauge-val">0</span>
-              </div>
-            </div>
-            <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">TPS (Txns/sec)</div>
-          </div>
 
           <!-- Pipeline Status -->
           <div class="card" style="flex-shrink: 0;">
@@ -1667,23 +1677,13 @@
         <!-- ── RIGHT COLUMN ── -->
         <div class="col-4" style="display: flex; flex-direction: column; gap: 16px;">
 
-          <!-- Controls -->
-          <div class="btn-row">
-            <button class="btn btn-green" id="btn-start">▶ Start</button>
-            <button class="btn btn-red" id="btn-stop">⏹ Stop</button>
-            <button class="btn btn-amber" id="btn-reset">↺ Reset Data</button>
-          </div>
-
-          <!-- Machine Metrics (Prometheus) -->
-          <div class="card">
+          <!-- Machine Metrics -->
+          <div class="card" style="flex-shrink: 0;">
             <div class="card-header">
               <span class="card-title">Machine Metrics</span>
               <span class="card-badge" style="background: var(--purple-dim); color: var(--purple);">Prometheus</span>
             </div>
-
             <div style="display:grid; gap:12px;">
-
-              <!-- CPU vs GPU -->
               <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px;">
                 <div style="font-size:11px; color:var(--text-muted); font-weight:600; margin-bottom:8px;">CPU vs GPU
                 </div>
@@ -1702,128 +1702,50 @@
                   </thead>
                   <tbody>
                     <tr style="border-top:1px solid var(--border);">
-                      <td style="padding:6px 4px;">Throughput (TPS)</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-cpu-tps">—</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-gpu-tps">—</td>
+                      <td style="padding:6px 4px;">TPS</td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tech-tbl-cpu-tps">—
+                      </td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tech-tbl-gpu-tps">—
+                      </td>
                     </tr>
                     <tr style="border-top:1px solid var(--border);">
-                      <td style="padding:6px 4px;">Utilization (%)</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-cpu-util">—</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-gpu-util">—</td>
+                      <td style="padding:6px 4px;">Util %</td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tech-tbl-cpu-util">—
+                      </td>
+                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tech-tbl-gpu-util">—
+                      </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
-
-              <!-- CPU vs FlashBlade -->
-              <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px;">
-                <div style="font-size:11px; color:var(--text-muted); font-weight:600; margin-bottom:8px;">CPU vs
-                  FlashBlade CPU</div>
-                <table style="width:100%; border-collapse:collapse; font-size:11px; table-layout:fixed;">
-                  <colgroup>
-                    <col style="width:45%;">
-                    <col style="width:27.5%;">
-                    <col style="width:27.5%;">
-                  </colgroup>
-                  <thead>
-                    <tr style="color:var(--text-muted); text-transform:uppercase; font-size:10px;">
-                      <th style="text-align:left; padding:6px 4px;">Metric</th>
-                      <th style="text-align:right; padding:6px 4px;">CPU</th>
-                      <th style="text-align:right; padding:6px 4px;">FlashBlade CPU</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr style="border-top:1px solid var(--border);">
-                      <td style="padding:6px 4px;">Throughput (TPS)</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-cpu2-tps">—</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-fb-mbps">—</td>
-                    </tr>
-                    <tr style="border-top:1px solid var(--border);">
-                      <td style="padding:6px 4px;">Utilization (%)</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-cpu2-util">—</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-fb-util">—</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <!-- GPU vs FlashBlade -->
-              <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px;">
-                <div style="font-size:11px; color:var(--text-muted); font-weight:600; margin-bottom:8px;">GPU vs
-                  FlashBlade GPU</div>
-                <table style="width:100%; border-collapse:collapse; font-size:11px; table-layout:fixed;">
-                  <colgroup>
-                    <col style="width:45%;">
-                    <col style="width:27.5%;">
-                    <col style="width:27.5%;">
-                  </colgroup>
-                  <thead>
-                    <tr style="color:var(--text-muted); text-transform:uppercase; font-size:10px;">
-                      <th style="text-align:left; padding:6px 4px;">Metric</th>
-                      <th style="text-align:right; padding:6px 4px;">GPU</th>
-                      <th style="text-align:right; padding:6px 4px;">FlashBlade GPU</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr style="border-top:1px solid var(--border);">
-                      <td style="padding:6px 4px;">Throughput (TPS)</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-gpu2-tps">—</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-fb2-mbps">—</td>
-                    </tr>
-                    <tr style="border-top:1px solid var(--border);">
-                      <td style="padding:6px 4px;">Utilization (%)</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-gpu2-util">—</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="tbl-fb2-util">—</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
             </div>
           </div>
 
           <!-- Model Performance -->
-          <div class="card">
+          <div class="card" style="flex-shrink: 0;">
             <div class="card-header">
               <span class="card-title">Model Performance</span>
             </div>
-            <div style="overflow-x: auto;">
-              <table style="width: 100%; font-size: 12px; border-collapse: collapse; margin-top: 5px;">
-                <thead>
-                  <tr style="text-align: left; border-bottom: 1px solid var(--border); color: var(--text-muted);">
-                    <th style="padding: 8px 4px; font-weight: 500;">Metric</th>
-                    <th style="padding: 8px 4px; font-weight: 500; text-align: right;">Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="padding: 10px 4px; color: var(--text-muted);">Precision @ Threshold</td>
-                    <td id="tech-progress-precision-val"
-                      style="padding: 10px 4px; text-align: right; font-family: var(--mono); font-weight: 700; color: var(--green);">
-                      —</td>
-                  </tr>
-                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="padding: 10px 4px; color: var(--text-muted);">Recall (Model Sensitivity)</td>
-                    <td id="tech-progress-recall-val"
-                      style="padding: 10px 4px; text-align: right; font-family: var(--mono); font-weight: 700; color: var(--blue);">
-                      —</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 10px 4px; color: var(--text-muted);">False Positive Rate (FPR)</td>
-                    <td id="tech-progress-fpr-val"
-                      style="padding: 10px 4px; text-align: right; font-family: var(--mono); font-weight: 700; color: var(--green);">
-                      —</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="sep"></div>
-            <div style="font-size: 11px; color: var(--text-muted); text-align: center;">Low false positives = minimal
-              customer friction</div>
+            <table style="width: 100%; font-size: 11px; border-collapse: collapse;">
+              <tbody>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                  <td style="padding: 8px 4px; color: var(--text-muted);">Precision</td>
+                  <td id="tech-model-precision"
+                    style="padding: 8px 4px; text-align: right; font-family: var(--mono); font-weight: 700; color: var(--green);">
+                    —</td>
+                </tr>
+                <tr>
+                  <td style="padding: 8px 4px; color: var(--text-muted);">Recall</td>
+                  <td id="tech-model-recall"
+                    style="padding: 8px 4px; text-align: right; font-family: var(--mono); font-weight: 700; color: var(--blue);">
+                    —</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
           <!-- FlashBlade Status -->
-          <div class="card card-accent">
+          <div class="card card-accent" style="flex-shrink: 0;">
             <div class="card-header">
               <span class="card-title">FlashBlade//S500</span>
               <span style="font-size: 11px; color: var(--green); display: flex; align-items: center; gap: 4px;">
@@ -1834,41 +1756,24 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
               <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
                 <div style="font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--blue);"
-                  id="fb-read">0 MB/s</div>
+                  id="tech-fb-read">0 MB/s</div>
                 <div style="font-size: 10px; color: var(--text-muted);">Read</div>
               </div>
               <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
                 <div style="font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--green);"
-                  id="fb-write">0 MB/s</div>
+                  id="tech-fb-write">0 MB/s</div>
                 <div style="font-size: 10px; color: var(--text-muted);">Write</div>
               </div>
             </div>
             <div class="progress-label"><span style="color: var(--text-muted);">Utilization</span><span
-                style="font-family: var(--mono); color: var(--orange); font-weight: 700;" id="fb-util">0%</span></div>
-            <div class="progress-track" style="height: 10px;">
-              <div class="progress-fill" id="fb-util-bar"
-                style="width: 0%; background: linear-gradient(90deg, var(--orange), #f97316);"></div>
+                style="font-family: var(--mono); color: var(--orange); font-weight: 700;" id="tech-fb-util">0%</span>
             </div>
-            <div style="text-align: center; margin-top: 10px;">
-              <span style="color: var(--text-muted); font-size: 11px;">Headroom: </span>
-              <span
-                style="color: var(--green); font-family: var(--mono); font-size: 22px; font-weight: 700;">8.3×</span>
+            <div class="progress-track" style="height: 10px;">
+              <div class="progress-fill" id="tech-fb-util-bar"
+                style="width: 0%; background: linear-gradient(90deg, var(--orange), #f97316);"></div>
             </div>
           </div>
 
-          <!-- Utilization Comparison (Combined) -->
-          <!-- <div class="card">
-            <div class="card-header">
-              <span class="card-title">Utilization Comparison</span>
-              <span class="card-badge" style="background: var(--bg-card); color: var(--text-muted);">Live</span>
-            </div>
-            <div style="margin-top:8px;">
-              <div class="util-compare-card" style="padding:8px;">
-                <div class="small-title">CPU · GPU · FlashBlade</div>
-                <div class="util-canvas-wrap" style="height:140px;"><canvas id="util-compare-all-chart"></canvas></div>
-              </div>
-            </div>
-          </div> -->
 
           <!-- Resource Allocation -->
           <div class="card" style="flex: 1; display: flex; flex-direction: column;">
@@ -1876,7 +1781,6 @@
               <span class="card-title">Resource Allocation</span>
             </div>
             <div style="margin-bottom: 10px;">
-              <label style="font-size: 11px; color: var(--text-muted);">Pod</label>
               <select id="resource-pod-select"
                 style="width: 100%; padding: 8px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 4px; color: var(--text-primary); font-size: 12px;">
                 <option value="data-gather">data-gather</option>
@@ -1893,36 +1797,16 @@
               <input type="range" id="resource-cpu" min="1" max="8" value="4" step="1">
             </div>
             <div style="margin-bottom: 12px;">
-              <div class="progress-label"><span>Memory Limit</span><span id="resource-mem-val"
+              <div class="progress-label"><span>Memory</span><span id="resource-mem-val"
                   style="font-family: var(--mono);">8 GB</span></div>
               <input type="range" id="resource-mem" min="1" max="8" value="8" step="1">
             </div>
-            <div id="resource-toast" style="font-size: 11px; min-height: 18px;"></div>
-
-            <div class="sep"></div>
-            <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">Current Infra Allocation</div>
-            <div id="infra-allocation-list" style="font-size: 10px; display: grid; gap: 4px; flex: 1;">
-              <!-- Populated by JS -->
-            </div>
+            <div id="infra-allocation-list" style="font-size: 10px; display: grid; gap: 4px; flex: 1;"></div>
           </div>
-
-
-
-        </div>
-      </div>
-
-      <!-- Bottom -->
-      <div class="bottom-msg">
-        ⚡ Scale compute, not complexity —
-        <span style="color: var(--orange);">FlashBlade</span> feeds parallel workers at
-        <span style="color: var(--blue);">357K TPS</span> while running at
-        <span style="color: var(--orange);">12% utilization</span>.
-        No Kafka. No Redis.
-        <span style="color: var(--green);">Single-consumer architecture with 8× headroom.</span>
-      </div>
-
-    </div>
-  </div>
+        </div> <!-- col-4 -->
+      </div> <!-- grid-12 -->
+    </div> <!-- dashboard -->
+  </div> <!-- tab-tech -->
 
   <!-- ═══════════════════════════════════════════════════════ -->
   <!-- ═══════════════ HARDWARE ANALYTICS TAB ══════════════ -->
@@ -1931,24 +1815,6 @@
     <div class="dashboard">
       <div class="grid-12" style="align-items: stretch;">
         <div class="col-8" style="display: flex; flex-direction: column; gap: 16px;">
-          <!-- Transactions Generated -->
-          <div class="card" style="margin-bottom: 0;">
-            <div class="card-header">
-              <span class="card-title">Transactions Generated</span>
-              <span class="card-badge" style="background: var(--purple-dim); color: var(--purple);"
-                id="hw-backlog">Backlog: 0</span>
-            </div>
-            <div class="pipeline-stage" style="margin-top: 5px;">
-              <div class="stage-header">
-                <span class="stage-label" style="color: var(--purple);">Pure Storage Data Lake</span>
-                <span class="stage-value" id="hw-generated">0 txns</span>
-              </div>
-              <div class="stage-bar">
-                <div class="stage-fill" id="hw-generated-bar"
-                  style="width: 0%; background: linear-gradient(90deg, #7c3aed, var(--purple));">0</div>
-              </div>
-            </div>
-          </div>
 
           <!-- Throughput Analytics -->
           <div class="card" style="flex: 1; display: flex; flex-direction: column;">
@@ -1972,207 +1838,36 @@
         </div>
 
         <div class="col-4" style="display: flex; flex-direction: column; gap: 16px;">
-          <!-- Machine Metrics (Prometheus Replicated) -->
           <div class="card">
             <div class="card-header">
-              <span class="card-title">Machine Metrics</span>
-              <span class="card-badge" style="background: var(--purple-dim); color: var(--purple);">Prometheus</span>
+              <span class="card-title">Grafana Dashboard</span>
+              <span class="card-badge" style="background: var(--orange-dim); color: var(--orange);">REAL-TIME</span>
             </div>
-
-            <div style="display:grid; gap:12px;">
-
-              <!-- CPU vs GPU -->
-              <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px;">
-                <div style="font-size:11px; color:var(--text-muted); font-weight:600; margin-bottom:8px;">CPU vs GPU
-                </div>
-                <table style="width:100%; border-collapse:collapse; font-size:11px; table-layout:fixed;">
-                  <colgroup>
-                    <col style="width:45%;">
-                    <col style="width:27.5%;">
-                    <col style="width:27.5%;">
-                  </colgroup>
-                  <thead>
-                    <tr style="color:var(--text-muted); text-transform:uppercase; font-size:10px;">
-                      <th style="text-align:left; padding:6px 4px;">Metric</th>
-                      <th style="text-align:right; padding:6px 4px;">CPU</th>
-                      <th style="text-align:right; padding:6px 4px;">GPU</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr style="border-top:1px solid var(--border);">
-                      <td style="padding:6px 4px;">Throughput (TPS)</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="hw-tbl-cpu-tps">—</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="hw-tbl-gpu-tps">—</td>
-                    </tr>
-                    <tr style="border-top:1px solid var(--border);">
-                      <td style="padding:6px 4px;">Utilization (%)</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="hw-tbl-cpu-util">—
-                      </td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="hw-tbl-gpu-util">—
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <!-- CPU vs FlashBlade -->
-              <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px;">
-                <div style="font-size:11px; color:var(--text-muted); font-weight:600; margin-bottom:8px;">CPU vs
-                  FlashBlade CPU</div>
-                <table style="width:100%; border-collapse:collapse; font-size:11px; table-layout:fixed;">
-                  <colgroup>
-                    <col style="width:45%;">
-                    <col style="width:27.5%;">
-                    <col style="width:27.5%;">
-                  </colgroup>
-                  <thead>
-                    <tr style="color:var(--text-muted); text-transform:uppercase; font-size:10px;">
-                      <th style="text-align:left; padding:6px 4px;">Metric</th>
-                      <th style="text-align:right; padding:6px 4px;">CPU</th>
-                      <th style="text-align:right; padding:6px 4px;">FlashBlade CPU</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr style="border-top:1px solid var(--border);">
-                      <td style="padding:6px 4px;">Throughput (TPS)</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="hw-tbl-cpu2-tps">—
-                      </td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="hw-tbl-fb-mbps">—</td>
-                    </tr>
-                    <tr style="border-top:1px solid var(--border);">
-                      <td style="padding:6px 4px;">Utilization (%)</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="hw-tbl-cpu2-util">—
-                      </td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="hw-tbl-fb-util">—</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-              <!-- GPU vs FlashBlade -->
-              <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:10px;">
-                <div style="font-size:11px; color:var(--text-muted); font-weight:600; margin-bottom:8px;">GPU vs
-                  FlashBlade GPU</div>
-                <table style="width:100%; border-collapse:collapse; font-size:11px; table-layout:fixed;">
-                  <colgroup>
-                    <col style="width:45%;">
-                    <col style="width:27.5%;">
-                    <col style="width:27.5%;">
-                  </colgroup>
-                  <thead>
-                    <tr style="color:var(--text-muted); text-transform:uppercase; font-size:10px;">
-                      <th style="text-align:left; padding:6px 4px;">Metric</th>
-                      <th style="text-align:right; padding:6px 4px;">GPU</th>
-                      <th style="text-align:right; padding:6px 4px;">FlashBlade GPU</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr style="border-top:1px solid var(--border);">
-                      <td style="padding:6px 4px;">Throughput (TPS)</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="hw-tbl-gpu2-tps">—
-                      </td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="hw-tbl-fb2-mbps">—
-                      </td>
-                    </tr>
-                    <tr style="border-top:1px solid var(--border);">
-                      <td style="padding:6px 4px;">Utilization (%)</td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="hw-tbl-gpu2-util">—
-                      </td>
-                      <td style="text-align:right; padding:6px 4px; font-family:var(--mono);" id="hw-tbl-fb2-util">—
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-
-            </div>
-          </div>
-
-          <!-- Model Performance -->
-          <div class="card">
-            <div class="card-header">
-              <span class="card-title">Model Performance</span>
-            </div>
-            <div style="overflow-x: auto;">
-              <table style="width: 100%; font-size: 12px; border-collapse: collapse; margin-top: 5px;">
-                <thead>
-                  <tr style="text-align: left; border-bottom: 1px solid var(--border); color: var(--text-muted);">
-                    <th style="padding: 8px 4px; font-weight: 500;">Metric</th>
-                    <th style="padding: 8px 4px; font-weight: 500; text-align: right;">Value</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="padding: 10px 4px; color: var(--text-muted);">Precision @ Threshold</td>
-                    <td id="hw-progress-precision-val"
-                      style="padding: 10px 4px; text-align: right; font-family: var(--mono); font-weight: 700; color: var(--green);">
-                      —</td>
-                  </tr>
-                  <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <td style="padding: 10px 4px; color: var(--text-muted);">Recall (Model Sensitivity)</td>
-                    <td id="hw-progress-recall-val"
-                      style="padding: 10px 4px; text-align: right; font-family: var(--mono); font-weight: 700; color: var(--blue);">
-                      —</td>
-                  </tr>
-                  <tr>
-                    <td style="padding: 10px 4px; color: var(--text-muted);">False Positive Rate (FPR)</td>
-                    <td id="hw-progress-fpr-val"
-                      style="padding: 10px 4px; text-align: right; font-family: var(--mono); font-weight: 700; color: var(--green);">
-                      —</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div class="sep"></div>
-            <div style="font-size: 11px; color: var(--text-muted); text-align: center;">Low false positives = minimal
-              customer friction</div>
-          </div>
-
-          <!-- FlashBlade Status -->
-          <div class="card card-accent" style="flex: 1; display: flex; flex-direction: column;">
-            <div class="card-header">
-              <span class="card-title">FlashBlade//S500</span>
-              <span style="font-size: 11px; color: var(--green); display: flex; align-items: center; gap: 4px;">
-                <span
-                  style="width: 6px; height: 6px; background: var(--green); border-radius: 50%; display: inline-block;"></span>Connected
-              </span>
-            </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
-              <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--blue);"
-                  id="hw-fb-read">0 MB/s</div>
-                <div style="font-size: 10px; color: var(--text-muted);">Read</div>
-              </div>
-              <div style="background: var(--bg-card); border-radius: 4px; padding: 10px; text-align: center;">
-                <div style="font-family: var(--mono); font-size: 16px; font-weight: 700; color: var(--green);"
-                  id="hw-fb-write">0 MB/s</div>
-                <div style="font-size: 10px; color: var(--text-muted);">Write</div>
-              </div>
-            </div>
-            <div class="progress-label"><span style="color: var(--text-muted);">Utilization</span><span
-                style="font-family: var(--mono); color: var(--orange); font-weight: 700;" id="hw-fb-util">0%</span>
-            </div>
-            <div class="progress-track" style="height: 10px;">
-              <div class="progress-fill" id="hw-fb-util-bar"
-                style="width: 0%; background: linear-gradient(90deg, var(--orange), #f97316);"></div>
-            </div>
-            <div style="text-align: center; margin-top: 10px;">
-              <span style="color: var(--text-muted); font-size: 11px;">Headroom: </span>
-              <span
-                style="color: var(--green); font-family: var(--mono); font-size: 22px; font-weight: 700;">8.3×</span>
+            <div style="display: flex; flex-direction: column; gap: 12px; padding: 10px; align-items: center;">
+              <iframe
+                src="http://localhost:3000/d-solo/fraud-detection-pipeline-v5/fraud-detection-pipeline3a-ingest-to-inference?orgId=1&from=1771605932345&to=1771606232345&timezone=browser&var-DS_PROMETHEUS=ffavkg6ywhlogc&refresh=5s&panelId=panel-6&__feature.dashboardSceneSolo=true"
+                width="100%" height="200" frameborder="0"></iframe>
+              <iframe
+                src="http://localhost:3000/d-solo/fraud-detection-pipeline-v5/fraud-detection-pipeline3a-ingest-to-inference?orgId=1&from=1771605932345&to=1771606232345&timezone=browser&var-DS_PROMETHEUS=ffavkg6ywhlogc&refresh=5s&panelId=panel-6&__feature.dashboardSceneSolo=true"
+                width="100%" height="200" frameborder="0"></iframe>
+              <iframe
+                src="http://localhost:3000/d-solo/fraud-detection-pipeline-v5/fraud-detection-pipeline3a-ingest-to-inference?orgId=1&from=1771605932345&to=1771606232345&timezone=browser&var-DS_PROMETHEUS=ffavkg6ywhlogc&refresh=5s&panelId=panel-6&__feature.dashboardSceneSolo=true"
+                width="100%" height="200" frameborder="0"></iframe>
             </div>
           </div>
         </div>
       </div>
-
-      <div class="bottom-msg">
-        📈 Deep infrastructure visibility — Monitoring
-        <span style="color: var(--blue);">CPU</span>,
-        <span style="color: var(--green);">GPU</span>, and
-        <span style="color: var(--orange);">Storage</span>
-        performance metrics in a unified analytics view.
-      </div>
     </div>
+  </div>
+
+  <div class="bottom-msg">
+    📈 Deep infrastructure visibility — Monitoring
+    <span style="color: var(--blue);">CPU</span>,
+    <span style="color: var(--green);">GPU</span>, and
+    <span style="color: var(--orange);">Storage</span>
+    performance metrics in a unified analytics view.
+  </div>
+  </div>
   </div>
 
   <script>
@@ -2267,7 +1962,7 @@
       const recallEl = el('mm-model-recall');
       const fprEl = el('progress-fpr-val');
 
-      // Parse precision value (e.g., "94.2%" -> 94.2)
+      if (!precisionEl || !recallEl) return;
       if (precisionEl) {
         const precisionText = precisionEl.textContent.trim();
         const precisionValue = parseFloat(precisionText);
@@ -2401,6 +2096,9 @@
       }
 
       const generated = gen.no_of_generated ?? b.no_of_generated ?? 0;
+
+      // Update Top Nav KPI
+      if (el('nav-total-generated')) el('nav-total-generated').textContent = fmtNum(generated);
 
       // Generation Velocity gauge — use REAL stream_speed from backend (delta-based TPS)
       const streamSpeed = gen.stream_speed || 0;
@@ -2559,24 +2257,52 @@
 
       const fb = (data.fb && data.fb.length) ? data.fb[data.fb.length - 1] : {};
       const fbUtil = fb.util || 0;
-      if (document.getElementById('fb-read')) document.getElementById('fb-read').textContent = (fb.read_mbps ?? fb.throughput_mbps ?? 0).toFixed(0) + ' MB/s';
-      if (document.getElementById('fb-write')) document.getElementById('fb-write').textContent = (fb.write_mbps ?? fb.throughput_mbps ?? 0).toFixed(0) + ' MB/s';
-      if (document.getElementById('fb-util')) document.getElementById('fb-util').textContent = fbUtil + '%';
+      const fbRead = fb.read_mbps ?? fb.throughput_mbps ?? 0;
+      const fbWrite = fb.write_mbps ?? fb.throughput_mbps ?? 0;
 
-      const fbBar = document.getElementById('fb-util-bar');
-      if (fbBar) {
-        fbBar.style.width = Math.min(100, fbUtil) + '%';
-        if (running && fbUtil > 1) fbBar.classList.add('streaming');
-        else fbBar.classList.remove('streaming');
+      // Update FlashBlade Status (Global & Tech Tab)
+      if (el('fb-read')) el('fb-read').textContent = fbRead.toFixed(0) + ' MB/s';
+      if (el('fb-write')) el('fb-write').textContent = fbWrite.toFixed(0) + ' MB/s';
+      if (el('fb-util')) el('fb-util').textContent = fbUtil + '%';
+      if (el('fb-util-bar')) {
+        el('fb-util-bar').style.width = Math.min(100, fbUtil) + '%';
+        if (running && fbUtil > 1) el('fb-util-bar').classList.add('streaming');
+        else el('fb-util-bar').classList.remove('streaming');
       }
 
-      // Update utilization comparison charts — use real node CPU/RAM from kpis (psutil data)
+      if (el('tech-fb-read')) el('tech-fb-read').textContent = fbRead.toFixed(0) + ' MB/s';
+      if (el('tech-fb-write')) el('tech-fb-write').textContent = fbWrite.toFixed(0) + ' MB/s';
+      if (el('tech-fb-util')) el('tech-fb-util').textContent = fbUtil + '%';
+      if (el('tech-fb-util-bar')) {
+        el('tech-fb-util-bar').style.width = Math.min(100, fbUtil) + '%';
+        if (running && fbUtil > 1) el('tech-fb-util-bar').classList.add('streaming');
+        else el('tech-fb-util-bar').classList.remove('streaming');
+      }
+
+      // Update Tech Tab Machine Metrics Table
+      if (hw.prep && hw.inf) {
+        const cpuTPS = window._ema.prep || 0;
+        const gpuTPS = window._ema.inf || 0;
+        const cpuUtil = hw.prep.util_cpu || 0;
+        const gpuUtil = hw.inf.util_gpu || 0;
+
+        if (el('tech-tbl-cpu-tps')) el('tech-tbl-cpu-tps').textContent = fmtNum(cpuTPS);
+        if (el('tech-tbl-gpu-tps')) el('tech-tbl-gpu-tps').textContent = fmtNum(gpuTPS);
+        if (el('tech-tbl-cpu-util')) el('tech-tbl-cpu-util').textContent = Math.round(cpuUtil) + '%';
+        if (el('tech-tbl-gpu-util')) el('tech-tbl-gpu-util').textContent = Math.round(gpuUtil) + '%';
+      }
+
+      // Update Model Performance in Tech Tab
+      const ml = b.ml_details || {};
+      if (el('tech-model-precision')) el('tech-model-precision').textContent = ml.precision != null ? (ml.precision * 100).toFixed(1) + '%' : '—';
+      if (el('tech-model-recall')) el('tech-model-recall').textContent = ml.recall != null ? (ml.recall * 100).toFixed(1) + '%' : '—';
+
+      // Update utilization comparison charts
       try {
         const nodeCpu = kpis['node_cpu_pct'] ?? kpis['1_node_cpu_pct'] ?? 0;
         const nodeRam = kpis['node_ram_pct'] ?? kpis['1_node_ram_pct'] ?? 0;
-        const gpuUtil = (data.gpu && data.gpu.length) ? (data.gpu[data.gpu.length - 1].util || 0) : 0;
-        const fbUtil = (data.fb && data.fb.length) ? (data.fb[data.fb.length - 1].util || 0) : 0;
-        updateUtilCharts({ cpu: nodeCpu, gpu: gpuUtil || nodeRam, flashblade: fbUtil });
+        const currentGpuUtil = (data.gpu && data.gpu.length) ? (data.gpu[data.gpu.length - 1].util || 0) : 0;
+        updateUtilCharts({ cpu: nodeCpu, gpu: currentGpuUtil || nodeRam, flashblade: fbUtil });
       } catch (e) { /* ignore */ }
 
 
@@ -3077,6 +2803,8 @@
           if (el('tbl-cpu-tps')) el('tbl-cpu-tps').textContent = fmtNum(cpuTPS);
           if (el('tbl-gpu-tps')) el('tbl-gpu-tps').textContent = fmtNum(gpuTPS);
           if (el('tbl-cpu2-tps')) el('tbl-cpu2-tps').textContent = fmtNum(cpuTPS);
+          if (el('tbl-gpu-tps')) el('tbl-gpu-tps').textContent = fmtNum(gpuTPS);
+          if (el('tbl-cpu2-tps')) el('tbl-cpu2-tps').textContent = fmtNum(cpuTPS);
           if (el('tbl-gpu2-tps')) el('tbl-gpu2-tps').textContent = fmtNum(gpuTPS);
         } else {
           if (el('throughput-cpu-val')) el('throughput-cpu-val').innerHTML = '0 <span style="font-size: 11px; color: var(--text-muted);">TPS</span>';
@@ -3248,7 +2976,7 @@
         },
         options: {
           responsive: true,
-          maintainAspectRatio: true,
+          maintainAspectRatio: false,
           interaction: {
             mode: 'index',
             intersect: false

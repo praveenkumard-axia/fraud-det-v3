@@ -197,10 +197,8 @@ def collect_metrics(
     
     t_delta = ts - _last_telemetry_stats["ts"]
     
-    # ✅ NEW: Prioritize persistent metrics from queue store over ephemeral telemetry
     m_store = queue_service.get_metrics()
     
-    # ✅ FIX: Use max() to ensure we pick the most advanced counter between store and telemetry
     generated_store = m_store.get("total_txns_generated", 0)
     generated_tel = telemetry.get("generated", 0)
     generated = max(generated_store, generated_tel)
