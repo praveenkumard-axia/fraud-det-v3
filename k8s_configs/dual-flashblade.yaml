@@ -345,9 +345,11 @@ spec:
             requests:
               cpu: "4000m"
               memory: "16Gi"
+              ephemeral-storage: "4Gi"
             limits:
               cpu: "4000m"
               memory: "16Gi"
+              ephemeral-storage: "4Gi"
       volumes:
         - name: cpu-fb
           persistentVolumeClaim:
