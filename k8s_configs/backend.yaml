@@ -28,7 +28,7 @@ spec:
       containers:
         - name: backend-server
           image: pduraiswamy16722/fraud-det-v3-backend:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
               name: http
