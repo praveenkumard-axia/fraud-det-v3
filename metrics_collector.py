@@ -60,44 +60,13 @@ _last_fb_stats = {
     "gpu": {"ts": 0.0, "bytes": 0}
 }
 
-# Cache for directory sizes to prevent excessive FlashBlade scans (Phase 4 optimization)
-_dir_size_cache = {}
-_DIR_SIZE_TTL = 15.0 # Cache for 15s
-
 def _get_dir_size(path: Path) -> int:
     """Calculate total size of files in a directory (recursive to capture run_TIMESTAMP subdirs)."""
-    # NEW: 15-second cache to prevent FlashBlade pressure
-    global _dir_size_cache
-    now = time.time()
-    path_key = str(path)
-    
-    if "_dir_size_cache" not in globals():
-        _dir_size_cache = {}
-        
-    if path_key in _dir_size_cache:
-        last_val, last_ts = _dir_size_cache[path_key]
-        if now - last_ts < _DIR_SIZE_TTL:
-            return last_val
-            
-    total = 0
     try:
         if not path.exists():
             return 0
-        
-        # Use os.walk for better performance and memory efficiency than rglob
-        # This avoids building a massive list of all files in memory
-        import os
-        for root, dirs, files in os.walk(str(path)):
-            for f in files:
-                try:
-                    fp = os.path.join(root, f)
-                    total += os.path.getsize(fp)
-                except (OSError, Exception):
-                    continue
-                    
-        # Update cache
-        _dir_size_cache[path_key] = (total, now)
-        return total
+        # Recursive glob to find all files in subdirectories
+        return sum(f.stat().st_size for f in path.rglob("*") if f.is_file())
     except Exception:
         return 0
 
@@ -196,27 +165,10 @@ def collect_metrics(
         _last_telemetry_stats = {"ts": ts, "gen": 0, "proc": 0}
     
     t_delta = ts - _last_telemetry_stats["ts"]
-    
-    # ✅ NEW: Prioritize persistent metrics from queue store over ephemeral telemetry
-    m_store = queue_service.get_metrics()
-    
-    # ✅ FIX: Use max() to ensure we pick the most advanced counter between store and telemetry
-    generated_store = m_store.get("total_txns_generated", 0)
-    generated_tel = telemetry.get("generated", 0)
-    generated = max(generated_store, generated_tel)
-        
-    # 'Processed' for Data Prep = total_txns_scored
-    processed_store = m_store.get("total_txns_scored", 0)
-    processed_tel = telemetry.get("txns_scored", 0)
-    processed = max(processed_store, processed_tel)
-
-    # UI Split for hardware charts (fallback to 40%/60% if no real split)
-    data_prep_cpu = telemetry.get("data_prep_cpu", int(processed * 0.4))
-    data_prep_gpu = telemetry.get("data_prep_gpu", int(processed * 0.6))
-    
-    # Ensure processed reflects the sum used in UI
-    if processed == 0 and (data_prep_cpu > 0 or data_prep_gpu > 0):
-        processed = data_prep_cpu + data_prep_gpu
+    generated = telemetry.get("generated", 0)
+    data_prep_cpu = telemetry.get("data_prep_cpu", 0)
+    data_prep_gpu = telemetry.get("data_prep_gpu", 0)
+    processed = data_prep_cpu + data_prep_gpu
 
     # Calculate REAL TPS based on delta rows / delta time
     if t_delta > 0.1: # Minimum interval for sanity
