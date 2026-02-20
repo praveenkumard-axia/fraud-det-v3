@@ -52,10 +52,10 @@ spec:
               mountPath: /mnt/gpu-fb
           resources:
             requests:
-              cpu: "500m"
+              cpu: "1000m"
               memory: "1Gi"
             limits:
-              cpu: "1000m"
+              cpu: "2000m"
               memory: "2Gi"
       volumes:
         - name: cpu-fb
