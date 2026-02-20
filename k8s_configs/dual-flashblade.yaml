@@ -280,6 +280,7 @@ spec:
               mountPath: /mnt/cpu-fb
           resources:
             requests:
+              cpu: "2000m"
               memory: "16Gi"
               nvidia.com/gpu: "1"
               ephemeral-storage: "4Gi"
@@ -288,7 +289,6 @@ spec:
               memory: "16Gi"
               nvidia.com/gpu: "1"
               ephemeral-storage: "4Gi"
-      volumes:
         - name: gpu-fb
           persistentVolumeClaim:
             claimName: fraud-det-v3-gpu-fb-v6
@@ -411,6 +411,7 @@ spec:
               mountPath: /mnt/cpu-fb
           resources:
             requests:
+              cpu: "2000m"
               memory: "16Gi"
               nvidia.com/gpu: "1"
               ephemeral-storage: "4Gi"
@@ -419,7 +420,6 @@ spec:
               memory: "16Gi"
               nvidia.com/gpu: "1"
               ephemeral-storage: "4Gi"
-      volumes:
         - name: gpu-fb
           persistentVolumeClaim:
             claimName: fraud-det-v3-gpu-fb-v6

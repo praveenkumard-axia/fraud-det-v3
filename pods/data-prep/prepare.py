@@ -30,7 +30,7 @@ from config_contract import QueueTopics, StoragePaths
 # Try importing GPU libraries
 try:
     import cudf
-    import cp
+    import cupy as cp
     import dask_cudf
     from dask.distributed import Client, wait
     from dask_cuda import LocalCUDACluster
@@ -100,8 +100,9 @@ STRING_COLUMNS_TO_DROP = [
 
 class DataPrepService:
     def __init__(self):
-        self.input_dir = StoragePaths.get_path('raw')
-        self.output_dir = StoragePaths.get_path('features')
+        # Respect container environment variables for mounts
+        self.input_dir = Path(os.getenv('INPUT_PATH', str(StoragePaths.get_path('raw'))))
+        self.output_dir = Path(os.getenv('OUTPUT_PATH', str(StoragePaths.get_path('features'))))
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         self.state_file = self.output_dir / ".prep_state.json"

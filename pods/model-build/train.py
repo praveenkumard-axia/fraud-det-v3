@@ -615,8 +615,8 @@ def main():
     parser = argparse.ArgumentParser(description="Fraud Detection Model Trainer")
     signal.signal(signal.SIGTERM, signal_handler)
     
-    input_dir = os.getenv('INPUT_DIR', 'auto')
-    output_dir = os.getenv('OUTPUT_DIR', 'auto')
+    input_dir = os.getenv('INPUT_PATH', os.getenv('INPUT_DIR', 'auto'))
+    output_dir = os.getenv('OUTPUT_PATH', os.getenv('OUTPUT_DIR', 'auto'))
     
     start_time = time.time()
     trainer = ModelTrainer(input_dir, output_dir)
