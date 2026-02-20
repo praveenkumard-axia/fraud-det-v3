@@ -2185,7 +2185,7 @@
       } else if (num >= 1000) {
         return (num / 1000).toFixed(1) + 'K';
       }
-      return Math.round(num).toString();
+      return num.toString();
     }
 
     // Global helper for element selection
@@ -2465,7 +2465,7 @@
 
       // Hardware Tab specifically
       if (hw.prep && hw.inf) {
-        updateHardwareTrendCharts(hw.prep, hw.inf, data.prometheus);
+        updateHardwareTrendCharts(hw.prep, hw.inf);
       }
 
 
@@ -2558,8 +2558,8 @@
 
       const fb = (data.fb && data.fb.length) ? data.fb[data.fb.length - 1] : {};
       const fbUtil = fb.util || 0;
-      if (document.getElementById('fb-read')) document.getElementById('fb-read').textContent = (fb.read_mbps ?? fb.throughput_mbps ?? 0).toFixed(0) + ' MB/s';
-      if (document.getElementById('fb-write')) document.getElementById('fb-write').textContent = (fb.write_mbps ?? fb.throughput_mbps ?? 0).toFixed(0) + ' MB/s';
+      if (document.getElementById('fb-read')) document.getElementById('fb-read').textContent = (fb.read_mbps ?? fb.throughput_mbps ?? 0).toFixed(1) + ' MB/s';
+      if (document.getElementById('fb-write')) document.getElementById('fb-write').textContent = (fb.write_mbps ?? fb.throughput_mbps ?? 0).toFixed(1) + ' MB/s';
       if (document.getElementById('fb-util')) document.getElementById('fb-util').textContent = fbUtil + '%';
 
       const fbBar = document.getElementById('fb-util-bar');
@@ -2985,16 +2985,16 @@
         // Estimate Util for chart
         fbU = Math.min(100, Math.round(fbVal / 20)); // Assume 2000MB/s max
 
-        if (el('mm-fb')) el('mm-fb').textContent = fbVal.toFixed(0);
-        if (el('fb-read')) el('fb-read').textContent = totalRead.toFixed(0) + ' MB/s';
-        if (el('fb-write')) el('fb-write').textContent = totalWrite.toFixed(0) + ' MB/s';
+        if (el('mm-fb')) el('mm-fb').textContent = fbVal.toFixed(1);
+        if (el('fb-read')) el('fb-read').textContent = totalRead.toFixed(1) + ' MB/s';
+        if (el('fb-write')) el('fb-write').textContent = totalWrite.toFixed(1) + ' MB/s';
         if (el('fb-util')) el('fb-util').textContent = fbU + '%';
         if (el('fb-util-bar')) el('fb-util-bar').style.width = fbU + '%';
 
 
         // Detailed Tables - Storage
-        if (el('tbl-fb-mbps')) el('tbl-fb-mbps').textContent = (totalRead * 0.3).toFixed(0) + ' MB/s';
-        if (el('tbl-fb2-mbps')) el('tbl-fb2-mbps').textContent = (totalRead * 0.7 + totalWrite).toFixed(0) + ' MB/s';
+        if (el('tbl-fb-mbps')) el('tbl-fb-mbps').textContent = (totalRead * 0.3).toFixed(1) + ' MB/s';
+        if (el('tbl-fb2-mbps')) el('tbl-fb2-mbps').textContent = (totalRead * 0.7 + totalWrite).toFixed(1) + ' MB/s';
         if (el('tbl-fb-util')) el('tbl-fb-util').textContent = fbU + '%';
         if (el('tbl-fb2-util')) el('tbl-fb2-util').textContent = fbU + '%';
 
@@ -3506,7 +3506,6 @@
       infCpuUtil: [], infGpuUtil: [], infIoWait: [], infMem: []
     };
 
-
     function initHardwareCharts() {
       const tEl = document.getElementById('hardware-throughput-chart');
       const uEl = document.getElementById('hardware-util-chart');
@@ -3535,14 +3534,13 @@
             // Prep (FlashBlade CPU storage)
             { label: 'Prep CPU (TPS)', data: hwTrendData.prepCpuTPS, borderColor: '#3b82f6', tension: 0.3, fill: false, borderWidth: 2 },
             { label: 'Prep GPU (TPS)', data: hwTrendData.prepGpuTPS, borderColor: '#8b5cf6', tension: 0.3, fill: false, borderWidth: 2 },
-            //            { label: 'FlashBlade CPU (Read)', data: hwTrendData.prepFbRead, borderColor: '#60a5fa', tension: 0.3, borderDash: [4, 2], fill: false, borderWidth: 1.5 },
-            //          { label: 'FlashBlade CPU (Write)', data: hwTrendData.prepFbWrite, borderColor: '#a78bfa', tension: 0.3, borderDash: [4, 2], fill: false, borderWidth: 1.5 },
+            { label: 'FlashBlade CPU (Read)', data: hwTrendData.prepFbRead, borderColor: '#60a5fa', tension: 0.3, borderDash: [4, 2], fill: false, borderWidth: 1.5 },
+            { label: 'FlashBlade CPU (Write)', data: hwTrendData.prepFbWrite, borderColor: '#a78bfa', tension: 0.3, borderDash: [4, 2], fill: false, borderWidth: 1.5 },
             // Inf (FlashBlade GPU storage)
             { label: 'Inf CPU (TPS)', data: hwTrendData.infCpuTPS, borderColor: '#10b981', tension: 0.3, fill: false, borderWidth: 2 },
             { label: 'Inf GPU (TPS)', data: hwTrendData.infGpuTPS, borderColor: '#f59e0b', tension: 0.3, fill: false, borderWidth: 2 },
-            { label: 'FlashBlades', data: hwTrendData.infFbRead, borderColor: '#34d399', tension: 0.3, borderDash: [2, 2], fill: false, borderWidth: 1.5 },
-            // { label: 'FlashBlade GPU (Read)', data: hwTrendData.infFbRead, borderColor: '#34d399', tension: 0.3, borderDash: [2, 2], fill: false, borderWidth: 1.5 },
-            // { label: 'FlashBlade GPU (Write)', data: hwTrendData.infFbWrite, borderColor: '#fbbf24', tension: 0.3, borderDash: [2, 2], fill: false, borderWidth: 1.5 }
+            { label: 'FlashBlade GPU (Read)', data: hwTrendData.infFbRead, borderColor: '#34d399', tension: 0.3, borderDash: [2, 2], fill: false, borderWidth: 1.5 },
+            { label: 'FlashBlade GPU (Write)', data: hwTrendData.infFbWrite, borderColor: '#fbbf24', tension: 0.3, borderDash: [2, 2], fill: false, borderWidth: 1.5 }
           ]
         },
         options: {
@@ -3569,13 +3567,12 @@
             // Prep
             { label: 'Prep CPU %', data: hwTrendData.prepCpuUtil, borderColor: '#3b82f6', tension: 0.3, fill: false, borderWidth: 2 },
             { label: 'Prep GPU %', data: hwTrendData.prepGpuUtil, borderColor: '#8b5cf6', tension: 0.3, fill: false, borderWidth: 2 },
-            { label: 'FlashBlades %', data: hwTrendData.prepIoWait, borderColor: '#60a5fa', tension: 0.3, borderDash: [3, 3], fill: false, borderWidth: 1.5 },
-            // { label: 'FlashBlade CPU %', data: hwTrendData.prepIoWait, borderColor: '#60a5fa', tension: 0.3, borderDash: [3, 3], fill: false, borderWidth: 1.5 },
+            { label: 'FlashBlade CPU %', data: hwTrendData.prepIoWait, borderColor: '#60a5fa', tension: 0.3, borderDash: [3, 3], fill: false, borderWidth: 1.5 },
             { label: 'Prep Mem %', data: hwTrendData.prepMem, borderColor: '#a78bfa', tension: 0.3, borderDash: [3, 3], fill: false, borderWidth: 1.5 },
-            // // Inf
+            // Inf
             { label: 'Inf CPU %', data: hwTrendData.infCpuUtil, borderColor: '#10b981', tension: 0.3, fill: false, borderWidth: 2 },
             { label: 'Inf GPU %', data: hwTrendData.infGpuUtil, borderColor: '#f59e0b', tension: 0.3, fill: false, borderWidth: 2 },
-            // { label: 'FlashBlade GPU %', data: hwTrendData.infIoWait, borderColor: '#34d399', tension: 0.3, borderDash: [3, 3], fill: false, borderWidth: 1.5 },
+            { label: 'FlashBlade GPU %', data: hwTrendData.infIoWait, borderColor: '#34d399', tension: 0.3, borderDash: [3, 3], fill: false, borderWidth: 1.5 },
             { label: 'Inf Mem %', data: hwTrendData.infMem, borderColor: '#fbbf24', tension: 0.3, borderDash: [3, 3], fill: false, borderWidth: 1.5 }
           ]
         },
@@ -3593,7 +3590,7 @@
       });
     }
 
-    function updateHardwareTrendCharts(prep, inf, prom) {
+    function updateHardwareTrendCharts(prep, inf) {
       if (!hardwareThroughputChart || !hardwareUtilChart) return;
 
       const now = new Date();
@@ -3615,7 +3612,7 @@
       hwTrendData.prepCpuTPS.push(prep.tps_cpu || 0); hwTrendData.prepGpuTPS.push(prep.tps_gpu || 0);
       hwTrendData.prepFbRead.push(prep.fb_read || 0); hwTrendData.prepFbWrite.push(prep.fb_write || 0);
       hwTrendData.infCpuTPS.push(inf.tps_cpu || 0); hwTrendData.infGpuTPS.push(inf.tps_gpu || 0);
-      hwTrendData.infFbRead.push(prom?.fb_throughput || inf.fb_read || 0); hwTrendData.infFbWrite.push(inf.fb_write || 0);
+      hwTrendData.infFbRead.push(inf.fb_read || 0); hwTrendData.infFbWrite.push(inf.fb_write || 0);
       // Push Util
       hwTrendData.prepCpuUtil.push(prep.util_cpu || 0); hwTrendData.prepGpuUtil.push(prep.util_gpu || 0);
       hwTrendData.prepIoWait.push(prep.util_io || 0); hwTrendData.prepMem.push(prep.util_mem || 0);
