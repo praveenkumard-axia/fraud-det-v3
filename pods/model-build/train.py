@@ -109,6 +109,7 @@ class ModelTrainer:
         self.training_interval = int(os.getenv('TRAINING_INTERVAL_SECONDS', '10'))  # Lowered for faster start
         self.min_samples_for_training = int(os.getenv('MIN_SAMPLES_FOR_TRAINING', '1000')) # Lowered significantly for first model
         self.backend_url = os.getenv('BACKEND_URL', 'http://localhost:8000')
+        self.sample_limit = int(os.getenv('TRAIN_SAMPLE_LIMIT', '500000')) # Limit rows for stability
         
         # Debugging: Log actual paths being used
         log.info(f"ModelTrainer Input Path:  {self.input_path.absolute()}")
@@ -212,8 +213,18 @@ class ModelTrainer:
         if self.gpu_mode:
             import cudf
             import cupy as cp
-            # GPU Path (simplified for this script, assumes single GPU fit or dask flow)
-            df = cudf.read_parquet(filepath)
+            
+            # CRITICAL FIX: Only load numeric features and label to avoid string column overflow
+            # 161M strings easily exceed cuDF's 2GB column limit.
+            cols = FEATURE_COLUMNS + ['is_fraud']
+            log.info(f"GPU Load: columns={len(cols)}, limit={self.sample_limit:,}")
+            
+            # Read first N rows for stability
+            df = cudf.read_parquet(filepath, columns=cols)
+            if len(df) > self.sample_limit:
+                log.info(f"Sampling first {self.sample_limit:,} rows (from {len(df):,} total)")
+                df = df.iloc[:self.sample_limit]
+            
             df = df.fillna(0) # Simple imputation
             available_feats = [c for c in FEATURE_COLUMNS if c in df.columns]
             
@@ -237,8 +248,13 @@ class ModelTrainer:
         else:
             import polars as pl
             import numpy as np
-            # CPU Path with Polars
-            df = pl.read_parquet(filepath)
+            
+            # CPU Path with Polars - CRITICAL FIX: Only load numeric features and label
+            cols = FEATURE_COLUMNS + ['is_fraud']
+            log.info(f"CPU Load: columns={len(cols)}, limit={self.sample_limit:,}")
+            
+            # Load with limit and selective columns
+            df = pl.scan_parquet(filepath).select([c for c in cols if c in pl.scan_parquet(filepath).columns]).head(self.sample_limit).collect()
             
             # Handle missing columns safely
             available_feats = [c for c in FEATURE_COLUMNS if c in df.columns]
@@ -503,9 +519,17 @@ parameters [
                     try:
                         log.info("Evaluating existing model on new data to update metrics...")
                         latest_file = feature_files[0]
-                        df = pl.read_parquet(latest_file)
+                        import polars as pl
+            
+                        # CRITICAL FIX: Only load numeric features and label
+                        cols = FEATURE_COLUMNS + ['is_fraud']
+                        log.info(f"CPU Load: columns={len(cols)}, limit={self.sample_limit:,}")
+                        
+                        # Load with limit
+                        df = pl.scan_parquet(latest_file).select([c for c in cols if c in pl.scan_parquet(latest_file).columns]).head(self.sample_limit).collect()
+                        
+                        available_feats = [c for c in FEATURE_COLUMNS if c in df.columns]
                         if len(df) > 100:
-                            available_feats = [c for c in FEATURE_COLUMNS if c in df.columns]
                             df = df.fill_null(0)
                             X_eval = np.ascontiguousarray(df[available_feats].to_pandas().values, dtype=np.float32)
                             y_eval = np.ascontiguousarray(df["is_fraud"].to_pandas().values, dtype=np.float32)
