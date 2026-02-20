@@ -320,6 +320,7 @@ class PipelineState:
                 "txns_scored": 0,
                 "fb_cpu_throughput": 0,
                 "fb_gpu_throughput": 0,
+                "high_risk_signals": []
             }
             self.start_time = None
     
@@ -645,9 +646,9 @@ def get_dashboard_data():
     fraud_prevented_usd = fraud_blocked * avg_txn_amount
     
     # Real data throughput
-    total_throughput = tel["throughput"]
     gpu_throughput = tel.get("throughput_gpu", 0)
     cpu_throughput = tel.get("throughput_cpu", 0)
+    total_throughput = cpu_throughput + gpu_throughput # Combined = sum of both paths
     
     # FlashBlade metrics (now using dual-volume telemetry)
     fb_cpu_throughput = tel.get("fb_cpu_throughput", 0)
@@ -712,7 +713,8 @@ def get_dashboard_data():
         "system_config": {
             "generation_rate": state.generation_rate,
             "priority": state.system_priority
-        }
+        },
+        "high_risk_signals": tel.get("high_risk_signals", [])
     }
 
 
@@ -1643,6 +1645,12 @@ async def _metrics_poll_loop():
                 with state.lock:
                     state.telemetry["fb_cpu_throughput"] = storage.get("cpu_mbps", 0)
                     state.telemetry["fb_gpu_throughput"] = storage.get("gpu_mbps", 0)
+                    state.telemetry["throughput_cpu"] = raw_metrics.get("cpu", [{}])[0].get("throughput", 0)
+                    state.telemetry["throughput_gpu"] = raw_metrics.get("gpu", [{}])[0].get("throughput", 0)
+                    state.telemetry["throughput"] = state.telemetry["throughput_cpu"] + state.telemetry["throughput_gpu"]
+                    # Capture signals
+                    if "high_risk_signals" in raw_metrics:
+                        state.telemetry["high_risk_signals"] = raw_metrics["high_risk_signals"]
         except Exception as e:
             print(f"Metrics poll error: {e}")
         await asyncio.sleep(1)

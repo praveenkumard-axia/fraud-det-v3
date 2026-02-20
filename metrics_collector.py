@@ -192,7 +192,10 @@ def collect_metrics(
         
     global _last_telemetry_stats
     if "_last_telemetry_stats" not in globals():
-        _last_telemetry_stats = {"ts": ts, "gen": 0, "proc": 0}
+        # --- Smoothing Global State ---
+        _last_telemetry_stats = {"ts": time.time(), "gen": 0, "proc": 0, "fraud": 0, "fraud_amt": 0.0}
+        _tps_ema = {"gen": 0.0, "proc": 0.0}
+        _high_risk_signals_cache = [] # List of dicts
     
     t_delta = ts - _last_telemetry_stats["ts"]
     
@@ -217,26 +220,72 @@ def collect_metrics(
         processed = data_prep_cpu + data_prep_gpu
 
     # Calculate REAL TPS based on delta rows / delta time
+    global _last_telemetry_stats, _tps_ema, _high_risk_signals_cache
+    
     if t_delta > 0.1: # Minimum interval for sanity
         calc_gen_tps = (generated - _last_telemetry_stats["gen"]) / t_delta
         calc_proc_tps = (processed - _last_telemetry_stats["proc"]) / t_delta
         
-        # Calculate fraud per minute (60s * fraud_delta / time_delta)
-        fraud_delta = (telemetry.get("fraud_blocked", 0) - _last_telemetry_stats.get("fraud", 0))
+        # Calculate fraud deltas from real metrics store if possible
+        real_fraud_count = m_store.get("fraud_blocked_count", telemetry.get("fraud_blocked", 0))
+        real_fraud_amt = m_store.get("total_fraud_amount_identified", 0.0) or 0.0
+        
+        fraud_delta = max(0, real_fraud_count - _last_telemetry_stats.get("fraud", 0))
+        fraud_amt_delta = max(0, real_fraud_amt - _last_telemetry_stats.get("fraud_amt", 0.0))
+        
         fraud_per_min = (fraud_delta / t_delta) * 60 if t_delta > 0 else 0
         
-        # Smooth throughput or use reported
-        cpu_throughput = max(0, int(calc_gen_tps))
-        gpu_throughput = max(0, int(calc_proc_tps))
+        # Capture recent high-risk signals (simulated if not real individual txns)
+        # Fix: Ensure simulated signals sum up exactly to the real fraud amount delta
+        if fraud_delta > 0 and fraud_amt_delta > 0.01:
+            cats = ["shopping_net", "grocery_pos", "misc_net", "gas_transport", "food_dining", "entertainment"]
+            states = ["TX", "CA", "NY", "FL", "IL", "PA", "OH", "GA"]
+            import random
+            
+            num_new_sigs = int(min(5, fraud_delta))
+            amt_remaining = fraud_amt_delta
+            
+            for i in range(num_new_sigs):
+                if i == num_new_sigs - 1:
+                    sig_amt = round(amt_remaining, 2)
+                else:
+                    # Random chunk between 10% and 50% of remaining
+                    sig_amt = round(random.uniform(amt_remaining * 0.1, amt_remaining * 0.5), 2)
+                    amt_remaining -= sig_amt
+                
+                if sig_amt <= 0.01: continue
+
+                _high_risk_signals_cache.append({
+                    "id": f"TXN-{random.randint(10000, 99999)}",
+                    "timestamp": datetime.now().strftime("%H:%M:%S"),
+                    "amount": sig_amt,
+                    "category": random.choice(cats),
+                    "state": random.choice(states),
+                    "score": random.randint(90, 99)
+                })
+            # Keep only last 10
+            _high_risk_signals_cache = _high_risk_signals_cache[-10:]
+
+        # --- EMA Smoothing (Wave Fix) ---
+        alpha = 0.3 # Smoothing factor (0.3 = 30% new, 70% old)
+        # If huge jump, reset EMA to prevent long catch-up
+        if abs(calc_gen_tps - _tps_ema["gen"]) > 50000: _tps_ema["gen"] = calc_gen_tps
+        else: _tps_ema["gen"] = (_tps_ema["gen"] * (1 - alpha)) + (calc_gen_tps * alpha)
+        
+        if abs(calc_proc_tps - _tps_ema["proc"]) > 50000: _tps_ema["proc"] = calc_proc_tps
+        else: _tps_ema["proc"] = (_tps_ema["proc"] * (1 - alpha)) + (calc_proc_tps * alpha)
+
+        cpu_throughput = max(0, int(_tps_ema["gen"]))
+        gpu_throughput = max(0, int(_tps_ema["proc"]))
         
         # Fallback to current reported throughput if deltas are zero but rows > 0 (starting up)
-        if cpu_throughput == 0:
+        if cpu_throughput == 0 and generated > 100:
              cpu_throughput = telemetry.get("throughput_cpu", 0)
-        if gpu_throughput == 0:
+        if gpu_throughput == 0 and processed > 100:
              gpu_throughput = telemetry.get("throughput_gpu", 0)
     else:
-        cpu_throughput = telemetry.get("throughput_cpu", 0)
-        gpu_throughput = telemetry.get("throughput_gpu", 0)
+        cpu_throughput = int(_tps_ema["gen"])
+        gpu_throughput = int(_tps_ema["proc"])
 
     
     cpu_point = {
@@ -347,7 +396,13 @@ def collect_metrics(
     }
 
     # Update for next poll
-    _last_telemetry_stats = {"ts": ts, "gen": generated, "proc": processed, "fraud": fraud_blocked}
+    _last_telemetry_stats = {
+        "ts": ts, 
+        "gen": generated, 
+        "proc": processed, 
+        "fraud": m_store.get("fraud_blocked_count", telemetry.get("fraud_blocked", 0)),
+        "fraud_amt": m_store.get("total_fraud_amount_identified", 0.0) or 0.0
+    }
 
     # Resource Allocation (Infra request/limit)
     res_alloc = get_deployment_resources()
@@ -407,6 +462,7 @@ def collect_metrics(
             }
         },
         "timestamp": ts,
+        "high_risk_signals": _high_risk_signals_cache[::-1] # Newest first
     }
     return payload
 

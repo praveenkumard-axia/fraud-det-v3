@@ -3073,14 +3073,9 @@
 
       trendChartData.timestamps.push(timeStr);
 
-      // If we are getting fake-zero (jitter) but backlog exists, push null to chart 
-      // instead of 0 to allow spanGaps to bridge the visual plunge.
-      // Note: We use actual '0' only if pipeline is truly stopped or idle.
-      const isJitter = (cpuTPS === 0 && gpuTPS === 0 && (typeof totalBacklog !== 'undefined' ? totalBacklog > 100 : true));
-
-      trendChartData.cpuTPS.push(isJitter ? null : Math.round(cpuTPS || 0));
-      trendChartData.gpuTPS.push(isJitter ? null : Math.round(gpuTPS || 0));
-      trendChartData.combinedTPS.push(isJitter ? null : Math.round(combinedTPS || 0));
+      trendChartData.cpuTPS.push(Math.round(cpuTPS || 0));
+      trendChartData.gpuTPS.push(Math.round(gpuTPS || 0));
+      trendChartData.combinedTPS.push(Math.round(combinedTPS || 0));
 
       // Debug: expose latest trend points for troubleshooting visual staleness
       try { console.debug("updateThroughputTrendChart() -> cpu:", trendChartData.cpuTPS.slice(-5), "gpu:", trendChartData.gpuTPS.slice(-5), "combined:", trendChartData.combinedTPS.slice(-5)); } catch (e) { }
@@ -3272,7 +3267,7 @@
             { label: 'Inf CPU (TPS)', data: hwTrendData.infCpuTPS, borderColor: '#10b981', tension: 0.3, fill: false, borderWidth: 2 },
             { label: 'Inf GPU (TPS)', data: hwTrendData.infGpuTPS, borderColor: '#f59e0b', tension: 0.3, fill: false, borderWidth: 2 },
             // Combined FlashBlade Throughput (Sum of CPU + GPU Path)
-            { label: 'FlashBlade Total (MB/s)', data: [], borderColor: '#fe5000', tension: 0.3, borderDash: [5, 5], fill: false, borderWidth: 2 }
+            { label: 'Combined TPS (Total)', data: [], borderColor: '#fe5000', tension: 0.3, borderDash: [5, 5], fill: false, borderWidth: 2 }
           ]
         },
         options: {
@@ -3355,9 +3350,9 @@
       hardwareThroughputChart.data.datasets[1].data = hwTrendData.prepGpuTPS;
       hardwareThroughputChart.data.datasets[2].data = hwTrendData.infCpuTPS;
       hardwareThroughputChart.data.datasets[3].data = hwTrendData.infGpuTPS;
-      // Dataset 4 is the Total FlashBlade (MB/s) - sum of all storage activity
-      const fbTotalData = hwTrendData.prepFbRead.map((v, i) => (v || 0) + (hwTrendData.prepFbWrite[i] || 0) + (hwTrendData.infFbRead[i] || 0) + (hwTrendData.infFbWrite[i] || 0));
-      hardwareThroughputChart.data.datasets[4].data = fbTotalData;
+      // Dataset 4 is the Total FlashBlade (MB/s) -> Now COMBINED TPS (Prep + Inf)
+      const tpsTotalData = hwTrendData.prepCpuTPS.map((v, i) => (v || 0) + (hwTrendData.prepGpuTPS[i] || 0) + (hwTrendData.infCpuTPS[i] || 0) + (hwTrendData.infGpuTPS[i] || 0));
+      hardwareThroughputChart.data.datasets[4].data = tpsTotalData;
       hardwareThroughputChart.update('none');
 
       // Update Util Chart
