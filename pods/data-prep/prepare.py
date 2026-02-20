@@ -143,13 +143,18 @@ class DataPrepService:
 
     def _init_dask(self):
         try:
-            gpu_count = len(cudf.cuda.runtime.getDeviceCount()) # hypothetical check or just assume
-            # Simplified dask init
+            # Fix: getDeviceCount() returns an integer, len() is invalid
+            gpu_count = cudf.cuda.runtime.getDeviceCount()
+            log(f"Detected {gpu_count} GPUs")
+            
+            # Use LocalCUDACluster if multiple GPUs or just for dask_cudf stability
             self.cluster = LocalCUDACluster()
             self.client = Client(self.cluster)
             log(f"Initialized Dask CUDA Cluster")
         except Exception as e:
-            log(f"Failed to init Dask: {e}. Falling back to single GPU/CPU handling logic if needed, but for now assuming standard setup.")
+            log(f"Failed to init Dask: {e}. Falling back to single GPU handling.")
+            self.cluster = None
+            self.client = None
 
     def get_pending_runs(self) -> List[Path]:
         """Get only the most recent run to process."""
@@ -261,18 +266,54 @@ class DataPrepService:
         q.sink_parquet(output_file, compression='snappy')
         
     def _process_gpu(self, files: List[Path], run_name: str):
-        # Fallback to original logic or similar dask_cudf logic
-        # For simplicity in this edit, assuming pure dask_cudf read -> compute -> write
+        """GPU optimized processing using RAPIDS cuDF / dask_cudf."""
+        import cudf
         import dask_cudf
         
-        ddf = dask_cudf.read_parquet([str(f) for f in files])
+        output_file = self.output_dir / f"features_{run_name}.parquet"
         
-        # Logic similar to original but streamlined
-        # ... logic ...
-        # (Omitting full GPU reimplementation for brevity as the environment is likely CPU-only 
-        # based on typical agent sandboxes, but the code structure supports it)
-        # In a real deployment, would paste the full GPU logic here.
-        log("GPU processing placeholder - would execute dask_cudf flow here.")
+        # 1. Load data
+        if self.client:
+            # Dask Path
+            ddf = dask_cudf.read_parquet([str(f) for f in files])
+        else:
+            # Single GPU Path
+            ddf = cudf.read_parquet([str(f) for f in files])
+        
+        # 2. Feature Engineering (Mirroring CPU logic)
+        # cuDF supports much of the same API as pandas/polars
+        
+        # Time features
+        if "unix_time" in ddf.columns:
+            # Use cupy-based operations or standard cudf accessors
+            # For simplicity and speed, we use the vectorized accessors
+            ddf['hour_of_day'] = (ddf['unix_time'] / 3600 % 24).astype('int8')
+            ddf['day_of_week'] = (ddf['unix_time'] / 86400 % 7).astype('int8')
+            ddf['is_weekend'] = (ddf['day_of_week'] >= 5).astype('int8')
+            ddf['is_night'] = ((ddf['hour_of_day'] >= 22) | (ddf['hour_of_day'] <= 6)).astype('int8')
+            
+        # Amount log
+        ddf['amt_log'] = ddf['amt'].log1p()
+        
+        # Distance
+        if all(x in ddf.columns for x in ["lat", "long", "merch_lat", "merch_long"]):
+            ddf['distance_km'] = (((ddf["merch_lat"] - ddf["lat"]) * 111.0)**2 + 
+                                  ((ddf["merch_long"] - ddf["long"]) * 85.0)**2).sqrt()
+            
+        # Encodings (cuDF .hash_values() is fast)
+        ddf['category_encoded'] = ddf['category'].hash_values() % 1000
+        ddf['state_encoded'] = ddf['state'].hash_values() % 100
+        ddf['gender_encoded'] = (ddf['gender'] == 'M').astype('int8')
+        ddf['city_pop_log'] = ddf['city_pop'].log1p()
+        ddf['zip_region'] = (ddf['zip'] // 10000).astype('int32')
+        
+        # 3. Cleanup columns
+        cols_to_keep = [c for c in ddf.columns if c not in STRING_COLUMNS_TO_DROP]
+        result = ddf[cols_to_keep].fillna(0)
+        
+        # 4. Save
+        log(f"GPU Save: {output_file.name}")
+        result.to_parquet(str(output_file), compression='snappy')
         
     def run_continuous(self):
         """Continuous streaming mode - consume from queue"""
