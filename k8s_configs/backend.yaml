@@ -20,6 +20,14 @@ spec:
         tier: "management"
     spec:
       serviceAccountName: fraud-backend
+      tolerations:
+        - key: "dedicated"
+          operator: "Equal"
+          value: "gpu"
+          effect: "NoSchedule"
+        - key: "node.kubernetes.io/disk-pressure"
+          operator: "Exists"
+          effect: "NoSchedule"
       containers:
         - name: backend-server
           image: pduraiswamy16722/fraud-det-v3-backend:latest
