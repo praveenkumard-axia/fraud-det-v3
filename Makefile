@@ -3,18 +3,20 @@
 
 NAMESPACE := fraud-det-v3
 MANIFEST_DUAL := k8s_configs/dual-flashblade.yaml
-IMAGES := apandit07650/fraud-det-v3-data-gather:latest apandit07650/fraud-det-v3-data-prep:latest apandit07650/fraud-det-v3-inference:latest apandit07650/fraud-det-v3-model-build:latest apandit07650/fraud-det-v3-dockerfile.backend:latest
+MANIFEST_BACKEND := k8s_configs/backend.yaml
+DOCKER_USER := pduraiswamy16722
+IMAGES := $(DOCKER_USER)/fraud-det-v3-data-gather:latest $(DOCKER_USER)/fraud-det-v3-data-prep:latest $(DOCKER_USER)/fraud-det-v3-inference:latest $(DOCKER_USER)/fraud-det-v3-model-build:latest $(DOCKER_USER)/fraud-det-v3-backend:latest
 BACKEND_URL ?= http://10.23.181.153:30880
 
 
 .PHONY: build build-no-cache load-kind load-minikube deploy deploy-dual start stop port-forward logs status restart clean
 
 build:
-	chmod +x k8s/build-images.sh
-	./k8s/build-images.sh
+	chmod +x build-images.sh
+	./build-images.sh
 
 build-no-cache:
-	NO_CACHE=--no-cache ./k8s/build-images.sh
+	NO_CACHE=--no-cache ./build-images.sh
 
 # Kind: load built images into cluster
 load-kind:
@@ -26,6 +28,7 @@ load-minikube:
 
 deploy:
 	kubectl apply -f $(MANIFEST_DUAL)
+	kubectl apply -f $(MANIFEST_BACKEND)
 
 deploy-dual:
 	kubectl apply -f $(MANIFEST_DUAL)
