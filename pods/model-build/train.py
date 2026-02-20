@@ -421,9 +421,9 @@ class ModelTrainer:
                 
             with open(model_file, 'w') as f:
                 json.dump(model_json, f)
-            log(f"Cleaned XGBoost JSON for Triton compatibility (Stripped iteration_indptr)")
+            log.info(f"Cleaned XGBoost JSON for Triton compatibility (Stripped iteration_indptr)")
         except Exception as e:
-            log(f"Warning: Failed to clean XGBoost JSON: {e}")
+            log.error(f"Warning: Failed to clean XGBoost JSON: {e}")
             
         # Save feature names
         with open(model_repo_dir / "feature_names.json", "w") as f:
