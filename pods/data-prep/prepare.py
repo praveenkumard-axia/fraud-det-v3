@@ -148,9 +148,12 @@ class DataPrepService:
             log(f"Detected {gpu_count} GPUs")
             
             # Use LocalCUDACluster if multiple GPUs or just for dask_cudf stability
-            self.cluster = LocalCUDACluster()
+            # POINT SPILL SPACE TO FLASHBLADE (STOPS EVICTION STORM)
+            spill_dir = self.output_dir / ".dask-worker-space"
+            spill_dir.mkdir(parents=True, exist_ok=True)
+            self.cluster = LocalCUDACluster(local_directory=str(spill_dir))
             self.client = Client(self.cluster)
-            log(f"Initialized Dask CUDA Cluster")
+            log(f"Initialized Dask CUDA Cluster (Spill: {spill_dir})")
         except Exception as e:
             log(f"Failed to init Dask: {e}. Falling back to single GPU handling.")
             self.cluster = None

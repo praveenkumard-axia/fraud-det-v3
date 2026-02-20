@@ -132,14 +132,14 @@ spec:
           env:
             - name: FLASHBLADE_PATH
               value: "/mnt/cpu-fb"
-            - name: CONTINUOUS_MODE
-              value: "true"
-            - name: QUEUE_TYPE
-              value: "flashblade"
             - name: CPU_VOLUME_PATH
               value: "/mnt/cpu-fb"
             - name: GPU_VOLUME_PATH
               value: "/mnt/gpu-fb"
+            - name: CONTINUOUS_MODE
+              value: "true"
+            - name: QUEUE_TYPE
+              value: "flashblade"
             - name: OUTPUT_PATH
               value: "/mnt/cpu-fb/raw"
             - name: OUTPUT_PATH_SECONDARY
@@ -203,6 +203,8 @@ spec:
           env:
             - name: FLASHBLADE_PATH
               value: "/mnt/cpu-fb"
+            - name: CPU_VOLUME_PATH
+              value: "/mnt/cpu-fb"
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
@@ -262,7 +264,11 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: FLASHBLADE_PATH
+              value: "/mnt/gpu-fb"
+            - name: CPU_VOLUME_PATH
               value: "/mnt/cpu-fb"
+            - name: GPU_VOLUME_PATH
+              value: "/mnt/gpu-fb"
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
@@ -330,6 +336,8 @@ spec:
           env:
             - name: FLASHBLADE_PATH
               value: "/mnt/cpu-fb"
+            - name: CPU_VOLUME_PATH
+              value: "/mnt/cpu-fb"
             - name: CONTINUOUS_MODE
               value: "true"
             - name: QUEUE_TYPE
@@ -396,7 +404,11 @@ spec:
               name: metrics
           env:
             - name: FLASHBLADE_PATH
+              value: "/mnt/gpu-fb"
+            - name: CPU_VOLUME_PATH
               value: "/mnt/cpu-fb"
+            - name: GPU_VOLUME_PATH
+              value: "/mnt/gpu-fb"
             - name: QUEUE_TYPE
               value: "flashblade"
             - name: MODEL_REPOSITORY
