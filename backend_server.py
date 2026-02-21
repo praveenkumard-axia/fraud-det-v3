@@ -853,10 +853,16 @@ async def reset_data():
             shell=True, capture_output=True, text=True
         )
         
+        # Step 2.5: Ensure previous cleanup job is deleted
+        subprocess.run(
+            "kubectl delete pod exhaustive-cleanup -n fraud-det-v3 --ignore-not-found=true --force 2>&1",
+            shell=True, capture_output=True, text=True
+        )
+
         # Step 3: Exhaustive wipe of FlashBlade volumes using a root-cleanup job
         # We wipe everything including hidden .prep_state.json and .metrics.json
         cleanup_cmd = '''
-kubectl run exhaustive-cleanup --image=busybox --restart=Never -n fraud-det-v3 --overrides='{"spec":{"containers":[{"name":"cleanup","image":"busybox","command":["sh","-c","rm -rf /mnt/cpu/* /mnt/cpu/.* /mnt/gpu/* /mnt/gpu/.* 2>/dev/null; echo Data fully cleared"],"volumeMounts":[{"name":"cpu-volume","mountPath":"/mnt/cpu"},{"name":"gpu-volume","mountPath":"/mnt/gpu"}]}],"volumes":[{"name":"cpu-volume","persistentVolumeClaim":{"claimName":"fraud-det-v3-cpu-fb-v6"}},{"name":"gpu-volume","persistentVolumeClaim":{"claimName":"fraud-det-v3-gpu-fb-v6"}}],"restartPolicy":"Never"}}' 2>&1
+kubectl run exhaustive-cleanup --image=busybox --restart=Never -n fraud-det-v3 --overrides='{"spec":{"containers":[{"name":"cleanup","image":"busybox","command":["sh","-c","rm -rf /mnt/cpu-fb/* /mnt/cpu-fb/.* /mnt/gpu-fb/* /mnt/gpu-fb/.* 2>/dev/null; echo Data fully cleared"],"volumeMounts":[{"name":"cpu-volume","mountPath":"/mnt/cpu-fb"},{"name":"gpu-volume","mountPath":"/mnt/gpu-fb"}]}],"volumes":[{"name":"cpu-volume","persistentVolumeClaim":{"claimName":"fraud-det-v3-cpu-fb-v6"}},{"name":"gpu-volume","persistentVolumeClaim":{"claimName":"fraud-det-v3-gpu-fb-v6"}}],"restartPolicy":"Never"}}' 2>&1
         '''
         subprocess.run(cleanup_cmd, shell=True, capture_output=True, text=True)
         
