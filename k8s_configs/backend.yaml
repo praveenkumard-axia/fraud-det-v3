@@ -27,7 +27,7 @@ spec:
           effect: "NoSchedule"
       containers:
         - name: backend-server
-          image: pduraiswamy16722/fraud-det-v3-backend:latest
+          image: pduraiswamy16722/fraud-det-v3-backend.v2:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8000

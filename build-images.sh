@@ -11,8 +11,8 @@ echo "=========================================================="
 DOCKER_USER="pduraiswamy16722"
 
 
-docker build --no-cache -t $DOCKER_USER/fraud-det-v3-backend:latest -f Dockerfile.backend .
-docker push $DOCKER_USER/fraud-det-v3-backend:latest
+docker build --no-cache -t $DOCKER_USER/fraud-det-v3-backend.v2:latest -f Dockerfile.backend .
+docker push $DOCKER_USER/fraud-det-v3-backend.v2:latest
 
 docker build --no-cache -t $DOCKER_USER/fraud-det-v3-data-gather:latest -f pods/data-gather/Dockerfile .
 docker push $DOCKER_USER/fraud-det-v3-data-gather:latest
